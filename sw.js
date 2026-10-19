@@ -1,5 +1,5 @@
 // Work Pix service worker: always tries the newest version first; the saved copy is only for when there is no internet.
-const CACHE = 'work-pix-v6';
+const CACHE = 'work-pix-v7';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'crew.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
 
