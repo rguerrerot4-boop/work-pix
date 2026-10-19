@@ -213,7 +213,7 @@ body[data-view="team"] .zoom{display:none}
 .navbtn{min-width:52px;height:44px}
 </style>
 
-<div class="splash" id="splash" aria-label="Work Pix">
+<div class="splash" id="splash" role="button" tabindex="0" aria-label="Work Pix: toca para entrar">
   <div class="splash-inner">
     <canvas class="splash-logo" id="splashLogo" width="32" height="32" aria-hidden="true"></canvas>
     <div class="splash-title" id="splashType" aria-hidden="true"></div>
@@ -1197,71 +1197,90 @@ function setCrew(list){
 function fmtSync(iso){ try { const d = new Date(iso); return 'Actualizado ' + d.toLocaleString('es-EC', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return 'Actualizado'; } }
 
 buildWorld(12); resize(); requestAnimationFrame(render);
-/* ---------- launch splash: typing, wink, then a retro pixel avalanche into the app ---------- */
-let splashOn = true;
-(function splash(){
-  const el = $('splash'), lg = $('splashLogo').getContext('2d'), title = $('splashType'), fxc = $('splashFx'), fg = fxc.getContext('2d');
-  let skip = false; try { skip = sessionStorage.getItem('wp-splash') === '1'; sessionStorage.setItem('wp-splash', '1'); } catch (e) {}
-  if (skip || RM) { el.remove(); fxc.remove(); splashOn = false; return; }
-  const WORD = 'WORK PIX', t0 = performance.now(), TYPE_AT = .45, PER = .17, WINK_AT = TYPE_AT + WORD.length * PER + .25, OUT_AT = WINK_AT + .9;
-  let shown = -1, leaving = false, raf = 0, sparks = [];
+/* ---------- launch splash: typing, wink, then a retro pixel avalanche into the app ----------
+   Plays on every launch and again whenever you come back after the app sat in the background.
+   Its clock only runs while the screen is visible, so it never "finishes" unseen. */
+let splashOn = !RM;
+const Splash = (() => {
+  const el = $('splash'), lg = $('splashLogo').getContext('2d'), title = $('splashType'), hint = $('splashHint'), fxc = $('splashFx'), fg = fxc.getContext('2d');
+  const WORD = 'WORK PIX', TYPE_AT = .45, PER = .17, WINK_AT = TYPE_AT + WORD.length * PER + .25;
+  let t = 0, last = 0, shown = -1, leaving = false, running = false, raf = 0, sparks = [], fxRaf = 0;
   function setTitle(n){
     if (n === shown) return; shown = n;
     const txt = WORD.slice(0, n), sp = txt.indexOf(' ');
-    title.innerHTML = '';
+    title.textContent = '';
     const a = document.createElement('span'); a.textContent = sp < 0 ? txt : txt.slice(0, sp + 1);
     const b = document.createElement('span'); b.className = 'c2'; b.textContent = sp < 0 ? '' : txt.slice(sp + 1);
     const c = document.createElement('span'); c.className = 'cur';
     title.append(a, b, c);
   }
   function frame(now){
-    const t = (now - t0) / 1000;
+    if (!running) return;
+    if (document.hidden) { last = 0; raf = requestAnimationFrame(frame); return; }
+    if (last) t += Math.min(.05, (now - last) / 1000);      // advance only while visible
+    last = now;
     const typing = t >= TYPE_AT && t < WINK_AT, wink = t >= WINK_AT && t < WINK_AT + .55;
     const hop = t >= WINK_AT && t < WINK_AT + .35 ? Math.round(Math.sin((t - WINK_AT) / .35 * Math.PI) * 2) : 0;
     drawLogo(lg, t, { speed: typing ? 14 : 3, still: t < TYPE_AT, wink, hop, look: wink ? 1 : 0 });
     if (typing && Math.random() < .5) sparks.push({ x: 10 + Math.random() * 12, y: 14 + Math.random() * 2, l: 1 });
-    if (wink && t - WINK_AT < .05) for (let i = 0; i < 5; i++) sparks.push({ x: 13 + Math.random() * 3, y: 8 + Math.random() * 2, l: 1, star: true });
+    if (wink && !frame.winked) { frame.winked = true; for (let i = 0; i < 5; i++) sparks.push({ x: 13 + Math.random() * 3, y: 8 + Math.random() * 2, l: 1, star: true }); }
     sparks = sparks.filter(sp => (sp.l -= .06) > 0);
     sparks.forEach(sp => { lg.fillStyle = sp.star ? '#ffffff' : '#7dffe7'; const y = Math.round(sp.y - (1 - sp.l) * (sp.star ? 5 : 3)); lg.fillRect(Math.round(sp.x), y, 1, 1); if (sp.star && sp.l > .5) { lg.fillRect(Math.round(sp.x) - 1, y, 3, 1); lg.fillRect(Math.round(sp.x), y - 1, 1, 3); } });
-    setTitle(Math.max(0, Math.min(WORD.length, Math.floor((t - TYPE_AT) / PER) + 1)) * (t >= TYPE_AT ? 1 : 0));
-    if (t > WINK_AT + .4) $('splashHint').classList.add('on');
+    setTitle(t >= TYPE_AT ? Math.max(0, Math.min(WORD.length, Math.floor((t - TYPE_AT) / PER) + 1)) : 0);
+    hint.classList.toggle('on', t > WINK_AT + .4);
     raf = requestAnimationFrame(frame);
   }
-  function avalanche(){
-    leaving = true; cancelAnimationFrame(raf);
+  function start(){
+    if (RM) return;
+    cancelAnimationFrame(raf); cancelAnimationFrame(fxRaf); running = false;
+    t = 0; last = 0; shown = -1; leaving = false; sparks = []; frame.winked = false;
+    fxc.style.display = 'none'; fg.clearRect(0, 0, fxc.width, fxc.height);
+    hint.classList.remove('on'); setTitle(0);
+    const logo = $('splashLogo'); logo.style.animation = 'none'; void logo.offsetWidth; logo.style.animation = '';
+    el.hidden = false; splashOn = true; running = true;
+    hideToast();
+    raf = requestAnimationFrame(frame);
+  }
+  function enter(){
+    if (!running || leaving) return;
+    leaving = true; running = false; cancelAnimationFrame(raf);
     const W = innerWidth, H = innerHeight, cs = Math.max(22, Math.round(W / 15)), cols = Math.ceil(W / cs), rows = Math.ceil(H / cs);
     fxc.width = W; fxc.height = H; fxc.style.display = 'block';
     const pal = ['#ffd84a', '#ff8f5a', '#4fd8b8', '#5ab8ff', '#b48cff', '#ff7fb0', '#a8e05a', '#1b1428', '#e3242b'];
-    const colDelay = Array.from({ length: cols }, () => Math.random() * .16);
-    const cells = [];
-    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
-      const fromBottom = rows - 1 - r;
-      cells.push({ c, r, col: pal[(Math.random() * pal.length) | 0], inAt: colDelay[c] + fromBottom * (.42 / rows) + Math.random() * .03,
-        outAt: .62 + Math.random() * .1 + colDelay[c] * .8 + (r / rows) * .12, vy: 0, spin: (Math.random() - .5) * 0.6 });
-    }
-    const s0 = performance.now(); let swapped = false;
+    const colDelay = Array.from({ length: cols }, () => Math.random() * .16), cells = [];
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) cells.push({ c, r, col: pal[(Math.random() * pal.length) | 0],
+      inAt: colDelay[c] + (rows - 1 - r) * (.42 / rows) + Math.random() * .03, outAt: .62 + Math.random() * .1 + colDelay[c] * .8 + (r / rows) * .12 });
+    let at = 0, prev = 0, swapped = false;
     const step = now => {
-      const t = (now - s0) / 1000; fg.clearRect(0, 0, W, H);
-      if (!swapped && t > .6) { swapped = true; el.remove(); splashOn = false; showToast(); }
+      if (prev) at += Math.min(.05, (now - prev) / 1000); prev = now;
+      fg.clearRect(0, 0, W, H);
+      if (!swapped && at > .6) { swapped = true; el.hidden = true; splashOn = false; if (crew.length) showToast(); }
       let alive = 0;
       for (const k of cells) {
-        let y = k.r * cs, x = k.c * cs, a = 1;
-        if (t < k.inAt) continue;
-        const ui = Math.min(1, (t - k.inAt) / .2);
-        y -= (1 - ui * ui) * (H * .7 + cs);
-        if (t > k.outAt) { const d = t - k.outAt; y += 900 * d * d + 60 * d; }
+        if (at < k.inAt) continue;
+        const ui = Math.min(1, (at - k.inAt) / .2); let y = k.r * cs - (1 - ui * ui) * (H * .7 + cs);
+        if (at > k.outAt) { const d = at - k.outAt; y += 900 * d * d + 60 * d; }
         if (y > H) continue;
-        alive++;
-        fg.fillStyle = k.col; fg.fillRect(x, Math.round(y), cs, cs);
-        fg.fillStyle = 'rgba(255,255,255,.28)'; fg.fillRect(x, Math.round(y), cs, 3); fg.fillRect(x, Math.round(y), 3, cs);
-        fg.fillStyle = 'rgba(0,0,0,.28)'; fg.fillRect(x, Math.round(y) + cs - 3, cs, 3); fg.fillRect(x + cs - 3, Math.round(y), 3, cs);
+        alive++; const x = k.c * cs, yy = Math.round(y);
+        fg.fillStyle = k.col; fg.fillRect(x, yy, cs, cs);
+        fg.fillStyle = 'rgba(255,255,255,.28)'; fg.fillRect(x, yy, cs, 3); fg.fillRect(x, yy, 3, cs);
+        fg.fillStyle = 'rgba(0,0,0,.28)'; fg.fillRect(x, yy + cs - 3, cs, 3); fg.fillRect(x + cs - 3, yy, 3, cs);
       }
-      if (t < .6 || alive) requestAnimationFrame(step); else fxc.remove();
+      if (at < .6 || alive) fxRaf = requestAnimationFrame(step); else { fxc.style.display = 'none'; leaving = false; }
     };
-    requestAnimationFrame(step);
+    fxRaf = requestAnimationFrame(step);
   }
-  el.addEventListener('click', () => { if (!leaving) avalanche(); });
-  raf = requestAnimationFrame(frame);
+  el.addEventListener('click', enter);
+  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') enter(); });
+  if (RM) { el.hidden = true; fxc.style.display = 'none'; } else start();
+  // coming back to the app after a while replays the intro
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 15000 && !running) start();     // also resets a half-finished avalanche
+  });
+  window.addEventListener('pageshow', e => { if (e.persisted && !running) start(); });
+  return { start, enter };
 })();
 
 async function loadCrew(){
@@ -1275,11 +1294,9 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
-  const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
 }
 })();
