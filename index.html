@@ -140,7 +140,7 @@ body[data-view="team"] .zoom{display:none}
 .flipper{position:relative}
 .card-back{display:none!important}
 .card{--cbg:var(--amber);--cbg2:var(--amber-2);width:100%;background:linear-gradient(180deg,var(--cbg),var(--cbg2));color:var(--outline);position:relative;overflow:hidden;
-  border:3px solid var(--outline);box-shadow:8px 8px 0 0 #000;padding:12px;display:flex;flex-direction:column;gap:10px;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+  border:3px solid var(--outline);box-shadow:8px 8px 0 0 #000;padding:12px;display:flex;flex-direction:column;gap:10px}
 .card[data-kind="connector"]{--cbg:var(--teal);--cbg2:var(--teal-2)}
 .card-back{position:absolute;inset:0;transform:rotateY(180deg);backface-visibility:hidden;-webkit-backface-visibility:hidden;border:3px solid var(--outline);box-shadow:8px 8px 0 0 #000;
   background:repeating-linear-gradient(45deg,#2a2142 0 6px,transparent 6px 12px),repeating-linear-gradient(-45deg,#2a2142 0 6px,transparent 6px 12px),#1c1730;
@@ -696,12 +696,31 @@ function fillCard(i){
 function openCard(i, mode, origin){
   if (!actors[i] || closing) return;
   const wasOpen = !ov.hidden;
-  if (!wasOpen) lastFocus = document.activeElement;
+  if (wasOpen) { swapTo(i, mode); return; }
+  lastFocus = document.activeElement;
   selected = i; fillCard(i); sparks = []; cardT = 0;
   ov.hidden = false; fitCard(); drawCard();
   if (!cardRAF) { let last = performance.now(); const loop = n => { const d = Math.min(.05, (n - last) / 1000); last = n; if (!intro) { cardT += d; drawCard(); } cardRAF = ov.hidden ? 0 : requestAnimationFrame(loop); }; cardRAF = requestAnimationFrame(loop); }
   startIntro(wasOpen ? 'swap' : (mode || 'full'), origin);
   $('close').focus({ preventScroll: true });
+}
+let swapping = false;
+function swapTo(i, dir){
+  if (swapping || i === selected) return;
+  stopIntro();
+  const show = () => { selected = i; fillCard(i); sparks = []; cardT = 0; fitCard(); drawCard(); };
+  if (RM) { show(); return; }
+  swapping = true;
+  const sgn = dir === 'prev' ? 1 : -1, P = 'perspective(900px) ';
+  const out = flipper.animate([{ transform: P + 'rotateY(0deg) scale(1)' }, { transform: P + 'rotateY(' + (90 * sgn) + 'deg) scale(.95)' }],
+    { duration: 170, easing: 'cubic-bezier(.5,0,.9,.5)', fill: 'forwards' });
+  out.onfinish = () => {
+    show(); out.cancel();
+    const inn = flipper.animate([{ transform: P + 'rotateY(' + (-90 * sgn) + 'deg) scale(.95)' }, { transform: P + 'rotateY(0deg) scale(1)' }],
+      { duration: 240, easing: 'cubic-bezier(.2,.8,.3,1.15)' });
+    inn.onfinish = () => { swapping = false; sweepGlare(); };
+    const r = flipper.getBoundingClientRect(); ringPulse(r.left + r.width / 2, r.top + r.height / 2);
+  };
 }
 let cardZoom = 1;
 function fitCard(){
@@ -946,7 +965,7 @@ function skipIntro(){ if (!intro) return; stopIntro(true); shade.style.opacity =
 let closing = false;
 function closeCard(){
   if (ov.hidden || closing) return;
-  stopIntro();
+  stopIntro(); swapping = false;
   const nav = $('cardNav'), a = actors[selected];
   const finish = () => {
     [flipper, shade, nav, beam, cflash].forEach(el => el.getAnimations().forEach(an => an.cancel()));
@@ -967,8 +986,8 @@ function closeCard(){
   shade.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 420, delay: 100, easing: 'cubic-bezier(.33,0,.2,1)', fill: 'forwards' }).onfinish = finish;
 }
 $('close').onclick = e => { e.stopPropagation(); closeCard(); };
-$('prev').onclick = e => { e.stopPropagation(); openCard((selected - 1 + actors.length) % actors.length, 'swap'); };
-$('next').onclick = e => { e.stopPropagation(); openCard((selected + 1) % actors.length, 'swap'); };
+$('prev').onclick = e => { e.stopPropagation(); openCard((selected - 1 + actors.length) % actors.length, 'prev'); };
+$('next').onclick = e => { e.stopPropagation(); openCard((selected + 1) % actors.length, 'next'); };
 ov.addEventListener('click', e => {
   if (closing) return;
   if (intro) { skipIntro(); return; }
@@ -1008,7 +1027,7 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v5';
+const APP_VERSION = 'v6';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
