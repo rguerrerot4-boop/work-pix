@@ -372,6 +372,26 @@ function drawCreature(ctx, x, y, o){
   h.ol.forEach(([px, py]) => R(ctx, x+px, hy+py, 1, 1, OUT));
   h.px.forEach(([px, py, c]) => R(ctx, x+px, hy+py, 1, 1, c));
 }
+function drawCreatureBack(ctx, x, y, o){
+  const [m, l, s] = o.pal; x = Math.round(x); y = Math.round(y);
+  const ly = y + 3 + (o.typeL || 0), ry = y + 3 + (o.typeR || 0);
+  R(ctx, x-3, ly-1, 4, 5, OUT); R(ctx, x-2, ly, 2, 3, m); R(ctx, x+13, ry-1, 4, 5, OUT); R(ctx, x+14, ry, 2, 3, m);
+  R(ctx, x+1, y-1, 12, 1, OUT); R(ctx, x-1, y+1, 1, 9, OUT); R(ctx, x+14, y+1, 1, 9, OUT); R(ctx, x+1, y+11, 12, 1, OUT);
+  R(ctx, x, y, 1, 1, OUT); R(ctx, x+13, y, 1, 1, OUT); R(ctx, x, y+10, 1, 1, OUT); R(ctx, x+13, y+10, 1, 1, OUT);
+  R(ctx, x+1, y, 12, 11, m); R(ctx, x, y+1, 14, 9, m);
+  R(ctx, x+1, y+7, 12, 4, s); R(ctx, x, y+7, 14, 3, s);
+  R(ctx, x+3, y+1, 8, 1, l); R(ctx, x+6, y+4, 2, 2, s);
+  const h = HATS[o.hat % HATS.length], hy = y + h.off;
+  h.ol.forEach(([px, py]) => R(ctx, x+px, hy+py, 1, 1, OUT));
+  h.px.forEach(([px, py, c]) => R(ctx, x+px, hy+py, 1, 1, c));
+}
+const backCache = new Map();
+function backSprite(a, typeL, typeR){
+  const key = a.hat + '|' + a.pal[0] + '|' + typeL + typeR;
+  let c = backCache.get(key);
+  if (!c) { c = document.createElement('canvas'); c.width = 24; c.height = 30; drawCreatureBack(c.getContext('2d'), 5, 10, { pal: a.pal, hat: a.hat, typeL, typeR }); backCache.set(key, c); }
+  return c;
+}
 // cached sprite frames: body top-left sits at (5,10) inside a 24x30 canvas
 const sprCache = new Map();
 function creatureSprite(a, blink, look, step, wave, typeL, typeR){
@@ -476,22 +496,31 @@ function plant(g, x, y, rnd){
   const [cx, cy] = iso(x + .25, y + .25, 8);
   for (let i = 0; i < 46; i++) { const a = rnd() * 6.28, r = rnd() * 6; g.fillStyle = ['#3fae5a','#2a7e3f','#5fd37a'][i % 3]; g.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy - 4 + Math.sin(a) * r * .8), 2, 2); }
 }
+// a row of code on the monitor, drawn as stepped pixels along the slanted screen (row 0 = top line)
+function pixLine(g, x0, y0, row, len, color){
+  const p = iso(x0 + .5, y0 + .44, 22.5 - row * 2.1), sx = Math.round(p[0]), sy = Math.round(p[1]);
+  g.fillStyle = color; for (let i = 0; i < len; i++) g.fillRect(sx + i * 2, sy + i, 2, 1);
+}
 function bakeDesk(a){
   const { x0, y0 } = a.desk;
   a.deskSpr = bake(x0 - .1, y0 - .1, 2.2, 1.2, 28, g => {
     box(g, x0, y0, 2, 1, 12, 0, '#d9a25b', '#b07c3e', '#946531');
     box(g, x0 + .55, y0 + .25, .5, .4, 2, 12, '#3a3a48', '#2a2a33', '#1e1e25');
     box(g, x0 + .35, y0 + .3, 1, .14, 11, 14, '#3a3a48', '#2a2a33', '#1e1e25');
-    poly(g, [iso(x0+.42,y0+.44,15), iso(x0+1.28,y0+.44,15), iso(x0+1.28,y0+.44,24), iso(x0+.42,y0+.44,24)], a.screen);
-    for (let k = 0; k < 3; k++) { const w = .3 + ((a.i + k) % 3) * .15; poly(g, [iso(x0+.5,y0+.44,21-k*2.5), iso(x0+.5+w,y0+.44,21-k*2.5), iso(x0+.5+w,y0+.44,22-k*2.5), iso(x0+.5,y0+.44,22-k*2.5)], OUT); }
+    poly(g, [iso(x0+.42,y0+.44,15), iso(x0+1.28,y0+.44,15), iso(x0+1.28,y0+.44,24), iso(x0+.42,y0+.44,24)], '#151226');
+    g.globalAlpha = .45; for (let k = 0; k < 4; k++) pixLine(g, x0, y0, k, 2 + (a.i + k * 2) % 4, a.screen); g.globalAlpha = 1;
     box(g, x0 + .45, y0 + .62, .9, .25, 1, 12, '#e8e6ef', '#b8b5c4', '#9b98a8');
     box(g, x0 + 1.55, y0 + .2, .2, .2, 4, 12, ['#ffffff','#ff9cc0','#7dffcf','#ffd84a'][a.i % 4], '#c9c4d6', '#a9a4b8');
     if (a.i % 3 === 0) box(g, x0 + 1.5, y0 + .55, .35, .3, 1.5, 12, '#ffe36b', '#d9bd3d', '#bfa22c');
     if (a.i % 3 === 1) box(g, x0 + .08, y0 + .25, .22, .22, 5, 12, '#5a5a6e', '#45455a', '#363648');
   });
-  a.chairSpr = bake(x0 + .6, y0 + 1.2, .8, .8, 18, g => {
-    box(g, x0 + .7, y0 + 1.3, .6, .6, 7, 0, '#8aa37f', '#6c8562', '#58704f');
-    box(g, x0 + .7, y0 + 1.82, .6, .12, 10, 6, '#7a9370', '#5f7856', '#4d6346');
+  a.chairSpr = bake(x0 + .6, y0 + 1.0, .8, .8, 12, g => {
+    box(g, x0 + .97, y0 + 1.37, .06, .06, 4, 0, '#3a3a48', '#2a2a33', '#1e1e25');
+    box(g, x0 + .7, y0 + 1.1, .6, .6, 3, 4, '#8aa37f', '#6c8562', '#58704f');
+  });
+  a.backSpr = bake(x0 + .6, y0 + 1.5, .8, .4, 18, g => {
+    box(g, x0 + .7, y0 + 1.64, .6, .1, 8, 6, '#7a9370', '#5f7856', '#4d6346');
+    box(g, x0 + .72, y0 + 1.66, .56, .06, 1, 14, '#9cb591', '#7a9370', '#5f7856');
   });
   const cp = iso(x0 + 1.05, y0 + .44, 16.5); a.cursor = [Math.round(cp[0]), Math.round(cp[1])];
   const sc = iso(x0 + .85, y0 + .44, 24); a.scr = [Math.round(sc[0]), Math.round(sc[1])];
@@ -514,32 +543,36 @@ const GENERIC = ['Compilando…', '¡Listo!', 'Revisando…', 'Un ratito más', 
 const anyOf = arr => arr[(Math.random() * arr.length) | 0];
 function workLine(a){ const n = (a.p.name || '').toLowerCase(); for (const [re, lines] of WORK) if (re.test(n)) return anyOf(Math.random() < .75 ? lines : GENERIC); return anyOf(GENERIC); }
 const env = { coffee: 0, printer: 0, water: 0 };
-let glyphs = [];
 function slot(i){ const col = i % 4, row = Math.floor(i / 4); return { x0: 1 + col * 3.2, y0: 3 + row * 3 }; }
 function makeActors(){
   const old = new Map(actors.map(a => [a.id, a]));
   actors = crew.map((p, i) => {
-    const s = slot(i), hx = s.x0 + 2.45, hy = s.y0 + .55, prev = old.get(p.id);
-    const a = prev && prev.home[0] === hx && prev.home[1] === hy ? prev : { x: hx, y: hy, path: [], wait: 1 + Math.random() * 6, blinkT: Math.random() * 3, stepT: 0, step: 0, look: 0, flash: 0, sp: 0 };
-    Object.assign(a, { id: p.id, i, p, home: [hx, hy], desk: s, pal: BODIES[(i * 5) % BODIES.length], hat: i % HATS.length, screen: p.kind === 'connector' ? '#3fe0c0' : ['#ffb05a','#7fb8ff','#ff8fc0','#a6f07a'][i % 4] });
+    const s = slot(i), hx = s.x0 + 1.0, hy = s.y0 + 1.35, prev = old.get(p.id);
+    const a = prev && prev.home[0] === hx && prev.home[1] === hy ? prev : { x: hx, y: hy, seated: true, state: Math.random() < .5 ? 'type' : 'home', typeT: 2 + Math.random() * 6, typeStart: -Math.random() * 3, path: [], wait: 1 + Math.random() * 6, blinkT: Math.random() * 3, stepT: 0, step: 0, look: 0, flash: 0, sp: 0 };
+    Object.assign(a, { id: p.id, i, p, home: [hx, hy], aisle: s.x0 + 2.45, gapY: s.y0 + 2.25, desk: s, pal: BODIES[(i * 5) % BODIES.length], hat: i % HATS.length, screen: p.kind === 'connector' ? '#3fe0c0' : ['#ffb05a','#7fb8ff','#ff8fc0','#a6f07a'][i % 4] });
     bakeDesk(a); return a;
   });
 }
-function goPath(a, pts, purpose){ a.path = pts; a.purpose = purpose; a.state = 'walk'; }
-function homePath(a){ return [[a.x, 2.15], [a.home[0], 2.15], [a.home[0], a.home[1]]]; }
+function goPath(a, pts, purpose){ a.path = pts; a.purpose = purpose; a.state = 'walk'; a.seated = false; }
+function leave(a, rest){ return (a.seated || a.state === 'stretchAt' ? [[a.home[0], a.gapY], [a.aisle, a.gapY], [a.aisle, 2.15]] : [[a.x, 2.15]]).concat(rest); }
+function homePath(a){
+  if (Math.abs(a.x - a.home[0]) < .05 && Math.abs(a.y - a.gapY) < .05) return [[a.home[0], a.home[1]]];
+  return [[a.x, 2.15], [a.aisle, 2.15], [a.aisle, a.gapY], [a.home[0], a.gapY], [a.home[0], a.home[1]]];
+}
 function arrived(a){
   a.sp = 0; a.look = 0;
   if (a.purpose === 'errand') { a.state = 'errandAt'; a.wait = 2 + Math.random() * 1.5; say(a, anyOf(ERRAND_LINES[a.errand.k]), 2); if (a.errand.k in env) env[a.errand.k] = 1.6; }
   else if (a.purpose === 'chat' && a.partner) { a.state = 'waitchat'; a.wait = 6; a.look = a.x < a.partner.x ? 1 : -1; }
-  else { a.state = 'home'; a.wait = 2 + Math.random() * 6; }
+  else if (a.purpose === 'stretch') { a.state = 'stretchAt'; a.wait = 2.2; say(a, anyOf(['¡A estirarse!', 'Uff, la espalda', 'Un descansito']), 1.8); a.cheer = 1; }
+  else { a.state = 'home'; a.seated = true; a.wait = 1 + Math.random() * 3; }
 }
 function tryChat(a){
-  const c = actors.filter(b => b !== a && (!b.state || b.state === 'home') && !b.path.length && Math.abs(b.home[0] - a.home[0]) <= 6.5 && Math.abs(b.home[1] - a.home[1]) <= 6.5);
+  const c = actors.filter(b => b !== a && (b.state === 'home' || b.state === 'type') && b.seated && !b.path.length && Math.abs(b.home[0] - a.home[0]) <= 6.5 && Math.abs(b.home[1] - a.home[1]) <= 6.5);
   if (!c.length) return false;
   const b = anyOf(c), mx = Math.max(1.6, Math.min(C - 1.6, (a.home[0] + b.home[0]) / 2));
   const [l, r] = a.home[0] <= b.home[0] ? [a, b] : [b, a];
   a.partner = b; b.partner = a; a.chatLead = true; b.chatLead = false;
-  goPath(l, [[l.home[0], 2.15], [mx - .45, 2.15]], 'chat'); goPath(r, [[r.home[0], 2.15], [mx + .45, 2.15]], 'chat');
+  goPath(l, leave(l, [[mx - .45, 2.15]]), 'chat'); goPath(r, leave(r, [[mx + .45, 2.15]]), 'chat');
   return true;
 }
 function endChat(a){ const b = a.partner; [a, b].forEach(x => { if (!x) return; x.partner = null; x.chatLead = false; goPath(x, homePath(x), 'return'); }); }
@@ -564,10 +597,10 @@ function update(dt){
     switch (a.state) {
       case 'type':
         a.typeT -= dt;
-        if (Math.random() < dt * 9) glyphs.push({ x: a.scr[0] + (Math.random() - .5) * 10, y: a.scr[1] - 2, l: .9, c: Math.random() < .3 ? '#ffffff' : a.screen });
         if (a.typeT <= 0) { a.state = 'home'; a.wait = 1 + Math.random() * 3; a.look = 0; if (Math.random() < .3) { say(a, '¡Listo!', 1.4); a.cheer = .8; } }
         break;
       case 'errandAt': a.wait -= dt; if (a.wait <= 0) goPath(a, homePath(a), 'return'); break;
+      case 'stretchAt': a.wait -= dt; if (a.wait <= 0) goPath(a, [[a.home[0], a.home[1]]], 'return'); break;
       case 'waitchat':
         a.wait -= dt;
         if (!a.partner) { goPath(a, homePath(a), 'return'); break; }
@@ -585,14 +618,14 @@ function update(dt){
         a.state = 'home'; a.wait -= dt;
         if (a.wait > 0) break;
         const r = Math.random();
-        if (r < .42) { a.state = 'type'; a.typeT = 4 + Math.random() * 6; a.look = -1; if (Math.random() < .45) say(a, workLine(a), 2.2); }
-        else if (r < .66) { const e = anyOf(ERRANDS), ex = e.x + (Math.random() - .5) * .6; a.errand = e; goPath(a, [[a.home[0], 2.15], [ex, 2.15], [ex, e.y]], 'errand'); }
-        else if (r < .84 && tryChat(a)) { /* walking to meet a teammate */ }
-        else { a.look = [-1, 0, 1][Math.floor(Math.random() * 3)]; a.wait = 2 + Math.random() * 4; }
+        if (r < .55) { a.state = 'type'; a.typeT = 5 + Math.random() * 8; a.typeStart = T; if (Math.random() < .4) say(a, workLine(a), 2.2); }
+        else if (r < .72) { const e = anyOf(ERRANDS), ex = e.x + (Math.random() - .5) * .6; a.errand = e; goPath(a, leave(a, [[ex, 2.15], [ex, e.y]]), 'errand'); }
+        else if (r < .86 && tryChat(a)) { /* walking to meet a teammate */ }
+        else if (r < .93) goPath(a, [[a.home[0], a.gapY]], 'stretch');
+        else { a.wait = 2 + Math.random() * 4; }
       }
     }
   });
-  glyphs = glyphs.filter(g => (g.l -= dt) > 0);
 }
 
 /* ---------- speech bubbles (a small pool of DOM labels that follow the characters) ---------- */
@@ -611,7 +644,7 @@ function placeBubbles(){
     if (T > b.until || !actors.includes(b.a)) { b.a = null; b.el.hidden = true; continue; }
     const [fx, fy] = iso(b.a.x, b.a.y);
     const half = (b.w || 80) / 2 + 6, sx = Math.max(half, Math.min(vw - half, (fx - cam.x) * S));
-    b.el.style.transform = 'translate(' + Math.round(sx) + 'px,' + Math.round((fy - 30 - cam.y) * S) + 'px) translate(-50%,-100%)';
+    b.el.style.transform = 'translate(' + Math.round(sx) + 'px,' + Math.round((fy - 30 - (b.a.seated ? 6 : 0) - cam.y) * S) + 'px) translate(-50%,-100%)';
   }
 }
 function match(p){ return filter === 'all' || p.kind === filter; }
@@ -673,7 +706,8 @@ function render(now){
   const list = [];
   for (const a of actors) {
     list.push({ k: a.desk.x0 + 1 + a.desk.y0 + .5, a, t: 0 });
-    list.push({ k: a.desk.x0 + 1 + a.desk.y0 + 1.6, a, t: 1 });
+    list.push({ k: a.desk.x0 + 1 + a.desk.y0 + 1.2, a, t: 1 });
+    list.push({ k: a.desk.x0 + 1 + a.desk.y0 + 1.7, a, t: 3 });
     list.push({ k: a.x + a.y, a, t: 2 });
   }
   list.sort((p, q) => p.k - q.k);
@@ -681,14 +715,17 @@ function render(now){
     const a = o.a;
     if (o.t === 0) {
       ctx.drawImage(a.deskSpr.c, a.deskSpr.x, a.deskSpr.y);
-      if (a.state === 'type') { ctx.fillStyle = '#ffffff'; for (let k = 0; k < 3; k++) { const w = 2 + (((T * 12) | 0) + k * 3 + a.i) % 4 * 2; ctx.globalAlpha = .75; ctx.fillRect(a.scr[0] - 7, a.scr[1] + 1 + k * 3, w, 1); } ctx.globalAlpha = 1; }
-      else if (Math.sin(T * 5 + a.i) > 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(a.cursor[0], a.cursor[1], 1, 2); }
+      if (a.state === 'type' && a.seated) {
+        const L = [6, 4, 5, 3], cols = [a.screen, '#ffffff', '#ffd84a', a.screen], prog = Math.floor((T - (a.typeStart || 0)) * 9) % 26;
+        let left = prog, cur = null;
+        for (let r = 0; r < 4; r++) { const n = Math.max(0, Math.min(L[r], left)); left -= L[r]; if (n) pixLine(ctx, a.desk.x0, a.desk.y0, r, n, cols[r]); if (n < L[r] && !cur) cur = [r, n]; }
+        if (cur && Math.sin(T * 14) > 0) { const p = iso(a.desk.x0 + .5, a.desk.y0 + .44, 22.5 - cur[0] * 2.1); ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(p[0]) + cur[1] * 2, Math.round(p[1]) + cur[1] - 1, 2, 2); }
+      } else if (Math.sin(T * 5 + a.i) > 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(a.cursor[0], a.cursor[1], 1, 2); }
     }
     else if (o.t === 1) ctx.drawImage(a.chairSpr.c, a.chairSpr.x, a.chairSpr.y);
+    else if (o.t === 3) ctx.drawImage(a.backSpr.c, a.backSpr.x, a.backSpr.y);
     else drawActor(a, snap);
   }
-  for (const g of glyphs) { ctx.globalAlpha = Math.min(1, g.l * 1.6); ctx.fillStyle = g.c; ctx.fillRect(Math.round(g.x), Math.round(g.y - (1 - g.l) * 12), (g.x | 0) % 2 ? 2 : 1, 1); }
-  ctx.globalAlpha = 1;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (hoverA) placeTip(hoverA);
   placeBubbles();
@@ -697,13 +734,17 @@ function drawActor(a, snap){
   const p = iso(a.x, a.y), fx = snap(p[0]), fy = snap(p[1]);
   const moving = a.path.length > 0, bob = RM || moving ? 0 : (Math.sin(T * 2.4 + a.i) > .6 ? 1 : 0);
   ctx.globalAlpha = match(a.p) ? 1 : .3;
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(fx - 6, fy - 1, 12, 2);
   const cheerHop = a.cheer > 0 ? Math.round(Math.abs(Math.sin((1 - a.cheer) * Math.PI * 3)) * 5 * a.cheer) : 0;
   const hop = (moving && a.step === 1 ? 1 : 0) + cheerHop;
-  const typing = a.state === 'type' && !RM, tf = typing ? ((T * 10) | 0) % 2 : 0;
-  ctx.drawImage(creatureSprite(a, a.blinkT < 0, a.look, a.step, a === hoverA || a.flash > 0 || a.cheer > 0, typing ? tf : 0, typing ? 1 - tf : 0), fx - 12, fy - 24 + (typing ? 0 : bob) - hop);
+  if (a.seated && !a.path.length) {
+    const typing = a.state === 'type' && !RM, tf = typing ? ((T * 11) | 0) % 2 : 0, nod = !typing && Math.sin(T * 1.7 + a.i) > .7 ? 1 : 0;
+    ctx.drawImage(backSprite(a, typing ? tf : 0, typing ? 1 - tf : 0), fx - 12, fy - 29 + nod - (a.cheer > 0 ? cheerHop : 0));
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(fx - 6, fy - 1, 12, 2);
+    ctx.drawImage(creatureSprite(a, a.blinkT < 0, a.look, a.step, a === hoverA || a.flash > 0 || a.cheer > 0), fx - 12, fy - 24 + bob - hop);
+  }
   if (a.p.kind === 'connector') {
-    const py = Math.round(fy - 32 + Math.sin(T * 3 + a.i) * 1.5), px = fx - 2;
+    const py = Math.round(fy - 32 - (a.seated ? 5 : 0) + Math.sin(T * 3 + a.i) * 1.5), px = fx - 2;
     ctx.fillStyle = OUT; ctx.fillRect(px - 1, py - 1, 6, 7);
     ctx.fillStyle = '#3fe0c0'; ctx.fillRect(px, py, 4, 3); ctx.fillRect(px, py + 3, 1, 2); ctx.fillRect(px + 3, py + 3, 1, 2);
     ctx.fillStyle = '#bff7ec'; ctx.fillRect(px + 1, py + 1, 2, 1);
@@ -721,7 +762,7 @@ let drag = null, pinch = null, noTap = false;
 function local(e){ const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 function pick(sx, sy){
   const wx = sx / S + cam.x, wy = sy / S + cam.y; let best = null, bd = 18;
-  actors.forEach(a => { const [fx, fy] = iso(a.x, a.y), d = Math.hypot(wx - fx, (wy - (fy - 12)) * .8); if (d < bd) { bd = d; best = a; } });
+  actors.forEach(a => { const [fx, fy] = iso(a.x, a.y), d = Math.hypot(wx - fx, (wy - (fy - 12 - (a.seated ? 5 : 0))) * .8); if (d < bd) { bd = d; best = a; } });
   return best;
 }
 function screenOf(a){ const r = cv.getBoundingClientRect(), [fx, fy] = iso(a.x, a.y); return { x: r.left + (fx - cam.x) * S, y: r.top + (fy - 14 - cam.y) * S }; }
@@ -1234,7 +1275,7 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v10';
+const APP_VERSION = 'v11';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
