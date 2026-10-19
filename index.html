@@ -146,8 +146,9 @@ body[data-view="team"] .zoom{display:none}
   text-shadow:4px 4px 0 #e3242b}
 .splash-title .cur{display:inline-block;width:.55em;height:.85em;background:#ffd84a;margin-left:4px;vertical-align:-.05em;animation:spCur .5s steps(1) infinite}
 .splash-title .c2{color:#ffd84a}
-.splash-hint{font-family:var(--f-label);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7d7699;opacity:0;transition:opacity .4s}
-.splash-hint.on{opacity:1}
+.splash-hint{font-family:var(--f-label);font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:#7d7699;opacity:0;transition:opacity .4s}
+.splash-hint.on{opacity:1;animation:spHint 1.2s steps(2) infinite}
+@keyframes spHint{50%{opacity:.35}}
 .splash-fx{position:fixed;inset:0;width:100%;height:100%;z-index:101;pointer-events:none;image-rendering:pixelated;display:none}
 @keyframes spIn{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes spCur{50%{opacity:0}}
@@ -1083,8 +1084,7 @@ let splashOn = true;
     sparks = sparks.filter(sp => (sp.l -= .06) > 0);
     sparks.forEach(sp => { lg.fillStyle = sp.star ? '#ffffff' : '#7dffe7'; const y = Math.round(sp.y - (1 - sp.l) * (sp.star ? 5 : 3)); lg.fillRect(Math.round(sp.x), y, 1, 1); if (sp.star && sp.l > .5) { lg.fillRect(Math.round(sp.x) - 1, y, 3, 1); lg.fillRect(Math.round(sp.x), y - 1, 1, 3); } });
     setTitle(Math.max(0, Math.min(WORD.length, Math.floor((t - TYPE_AT) / PER) + 1)) * (t >= TYPE_AT ? 1 : 0));
-    if (t > 1.2) $('splashHint').classList.add('on');
-    if (t >= OUT_AT && !leaving) { avalanche(); return; }
+    if (t > WINK_AT + .4) $('splashHint').classList.add('on');
     raf = requestAnimationFrame(frame);
   }
   function avalanche(){
@@ -1135,7 +1135,7 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v8';
+const APP_VERSION = 'v9';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
