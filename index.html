@@ -135,8 +135,9 @@ body[data-view="team"] .zoom{display:none}
   clip-path:polygon(42% 100%,58% 100%,100% 0,0 0)}
 .projector{position:absolute;left:50%;bottom:0;width:36px;height:10px;margin-left:-18px;background:#2a2a36;border:2px solid #000;box-shadow:inset 0 -3px 0 #121218}
 .projector::after{content:"";position:absolute;left:12px;top:-4px;width:8px;height:4px;background:#7dffe7}
-.stage3d{perspective:1100px;position:relative;z-index:2;width:min(370px,100%);flex:none}
-.flipper{position:relative;transform-style:preserve-3d;will-change:transform}
+.stage3d{position:relative;z-index:2;width:min(370px,100%);flex:none}
+.flipper{position:relative}
+.card-back{display:none!important}
 .card{--cbg:var(--amber);--cbg2:var(--amber-2);width:100%;background:linear-gradient(180deg,var(--cbg),var(--cbg2));color:var(--outline);position:relative;overflow:hidden;
   border:3px solid var(--outline);box-shadow:8px 8px 0 0 #000;padding:12px;display:flex;flex-direction:column;gap:10px;backface-visibility:hidden;-webkit-backface-visibility:hidden}
 .card[data-kind="connector"]{--cbg:var(--teal);--cbg2:var(--teal-2)}
@@ -908,20 +909,18 @@ function startIntro(mode, origin){
     st.landAt = 0; st.projDur = 280;
     st.anims.push(shade.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, fill: 'both' }));
   } else if (mode === 'full') {
-    const o = origin || { x: cx, y: innerHeight }, dx = (o.x - cx) / cardZoom, dy = (o.y - cy) / cardZoom;
-    st.landAt = 760; st.projDur = 0;
-    st.anims.push(shade.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: 'cubic-bezier(.33,0,.2,1)', fill: 'both' }));
+    st.landAt = 260; st.projDur = 0;
+    st.anims.push(shade.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out', fill: 'both' }));
     st.anims.push(flipper.animate([
-      { transform: `translate3d(${dx}px,${dy}px,0) scale(.18) rotateY(200deg)`, opacity: 0, easing: 'cubic-bezier(.2,.8,.3,1)' },
-      { opacity: 1, offset: .15 },
-      { transform: 'translate3d(0,-6px,0) scale(1.035) rotateY(-6deg)', opacity: 1, offset: .72, easing: 'cubic-bezier(.4,0,.3,1)' },
-      { transform: 'translate3d(0,0,0) scale(1) rotateY(0deg)', opacity: 1 }
-    ], { duration: st.landAt, easing: 'linear' }));
+      { transform: 'scale(.9)', opacity: 0, easing: 'cubic-bezier(.2,.9,.3,1.2)' },
+      { transform: 'scale(1)', opacity: 1 }
+    ], { duration: st.landAt }));
   } else {
-    st.landAt = 520; st.projDur = 0;
+    st.landAt = 200; st.projDur = 0;
     st.anims.push(flipper.animate([
-      { transform: 'rotateY(0deg) scale(1)' }, { transform: 'rotateY(-180deg) scale(.95)', offset: .5 }, { transform: 'rotateY(-360deg) scale(1)' }
-    ], { duration: st.landAt, easing: 'cubic-bezier(.45,0,.25,1)' }));
+      { transform: 'scale(.96)', opacity: .3, easing: 'cubic-bezier(.2,.9,.3,1.2)' },
+      { transform: 'scale(1)', opacity: 1 }
+    ], { duration: st.landAt }));
   }
   const tick = now => {
     if (intro !== st) return;
