@@ -123,11 +123,12 @@ body[data-view="team"] .zoom{display:none}
   padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
 .navbtn{font-family:var(--f-label);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink);background:var(--panel);border:2px solid var(--line);padding:0 14px;cursor:pointer;box-shadow:3px 3px 0 0 #000}
 .navbtn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 0 #000}
+#overlay[hidden]{display:flex!important;visibility:hidden;pointer-events:none}
 .shade{position:fixed;inset:0;background:rgba(8,6,14,.9);z-index:0}
-.fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
+.fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60;visibility:hidden}
 .ring{position:fixed;left:0;top:0;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;border:10px solid var(--rc,#ffd84a);
   box-shadow:0 0 26px 6px var(--rc,#ffd84a),inset 0 0 26px 6px var(--rc,#ffd84a);opacity:0;pointer-events:none;z-index:3}
-.rays{position:fixed;width:110vmax;height:110vmax;left:0;top:0;pointer-events:none;opacity:0;z-index:1;background-size:100% 100%;will-change:transform,opacity}
+.rays{position:fixed;width:560px;height:560px;left:0;top:0;pointer-events:none;opacity:0;z-index:1;background-size:100% 100%;will-change:transform,opacity}
 .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:7}
 .beam{position:fixed;pointer-events:none;opacity:0;z-index:1;
   background:linear-gradient(0deg,rgba(125,255,231,.75),rgba(125,255,231,.08) 70%,transparent);
@@ -152,7 +153,7 @@ body[data-view="team"] .zoom{display:none}
 .card-top{display:flex;align-items:center;gap:10px;font-family:var(--f-label);font-size:12px;letter-spacing:.06em}
 .stripes{height:14px;flex:1;background:repeating-linear-gradient(-45deg,var(--outline) 0 6px,transparent 6px 10px);border:2px solid var(--outline)}
 .art{position:relative;aspect-ratio:1/0.82;max-width:100%;border:3px solid var(--outline);background:#0f0c18}
-.art canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+.art canvas{width:100%;height:100%;display:block;image-rendering:pixelated;will-change:transform}
 .kind{position:absolute;left:8px;top:8px;font-family:var(--f-label);font-size:11px;letter-spacing:.08em;background:var(--sel);color:var(--outline);padding:3px 7px;border:2px solid var(--outline)}
 .card[data-kind="connector"] .kind{background:var(--holo)}
 .id-row{display:flex;justify-content:space-between;gap:8px;font-family:var(--f-label);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-variant-numeric:tabular-nums}
@@ -503,9 +504,9 @@ function stepCamera(dt){
   }
 }
 function resize(){
-  const r = cv.getBoundingClientRect(); if (!r.width || !r.height) return; dpr = Math.min(2, window.devicePixelRatio || 1);
+  const r = cv.getBoundingClientRect(); if (!r.width || !r.height) return; dpr = 1;
   const cx = cam.x + vw / S / 2, cy = cam.y + vh / S / 2, first = !vw;
-  if (first) S = St = r.width < 600 ? 2.5 : 2;
+  if (first) S = St = r.width < 600 ? 3 : 2;
   vw = r.width; vh = r.height; cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
   if (first || resize.reset) { const f = iso(7.2, 5.5); cam.x = f[0] - vw / S / 2; cam.y = f[1] - vh / S * .4; resize.reset = false; } else { cam.x = cx - vw / S / 2; cam.y = cy - vh / S / 2; }
   clampCam();
@@ -515,11 +516,16 @@ $('zIn').onclick = () => zoomTo(Math.round(St) + 1);
 $('zOut').onclick = () => zoomTo(Math.round(St) - 1);
 
 /* ---------- scene render ---------- */
+let lastLogo = 0;
 function render(now){
-  if (!ov.hidden && !closing && !intro) { t0 = now; requestAnimationFrame(render); return; }   // card fully open: let the GPU rest
+  requestAnimationFrame(render);
+  if (now - lastLogo > 120) { lastLogo = now; drawLogo(logoCtx, RM ? 0.4 : now / 1000); }
+  const covered = !ov.hidden || !$('viewTeam').hidden;     // office not visible: skip all work
+  if (covered) { t0 = now; return; }
+  const busy = drag || pinch || vel.x || vel.y || Math.abs(St - S) > .0005 || actors.some(a => a.flash > 0 || a.cheer > 0);
+  if (!busy && now - t0 < 31) return;                                     // idle: ~30fps is plenty for blinking and walking
   const dt = Math.min(.05, (now - t0) / 1000); t0 = now; T += dt;
   update(dt); stepCamera(dt);
-  drawLogo(logoCtx, RM ? 0.4 : T);
   const k = S * dpr, snap = v => Math.round(v * k) / k;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#0b0912'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.imageSmoothingEnabled = false;
@@ -545,7 +551,6 @@ function render(now){
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (hoverA) placeTip(hoverA);
-  requestAnimationFrame(render);
 }
 function drawActor(a, snap){
   const p = iso(a.x, a.y), fx = snap(p[0]), fy = snap(p[1]);
@@ -691,8 +696,8 @@ function openCard(i, mode, origin){
   const wasOpen = !ov.hidden;
   if (!wasOpen) lastFocus = document.activeElement;
   selected = i; fillCard(i); sparks = []; cardT = 0;
-  ov.hidden = false; fitCard();
-  if (!cardRAF) { let last = performance.now(); const loop = n => { cardT += Math.min(.05, (n - last) / 1000); last = n; drawCard(); cardRAF = ov.hidden ? 0 : requestAnimationFrame(loop); }; cardRAF = requestAnimationFrame(loop); }
+  ov.hidden = false; fitCard(); drawCard();
+  if (!cardRAF) { let last = performance.now(); const loop = n => { const d = Math.min(.05, (n - last) / 1000); last = n; if (!intro) { cardT += d; drawCard(); } cardRAF = ov.hidden ? 0 : requestAnimationFrame(loop); }; cardRAF = requestAnimationFrame(loop); }
   startIntro(wasOpen ? 'swap' : (mode || 'full'), origin);
   $('close').focus({ preventScroll: true });
 }
@@ -780,16 +785,27 @@ function burst(n, cx, cy, w, h){
   }
   ensureFx();
 }
-function sizeFx(){ const d = Math.min(1.5, window.devicePixelRatio || 1), w = Math.round(innerWidth * d), h = Math.round(innerHeight * d); if (fx.width !== w || fx.height !== h) { fx.width = w; fx.height = h; } fctx.setTransform(d, 0, 0, d, 0, 0); }
+function sizeFx(){ const d = 1, w = Math.round(innerWidth * d), h = Math.round(innerHeight * d); if (fx.width !== w || fx.height !== h) { fx.width = w; fx.height = h; } fctx.setTransform(d, 0, 0, d, 0, 0); }
 let zaps = [];
-function ensureFx(){ if (!fxRAF) { let last = performance.now(); const tick = n2 => { const dt = Math.min(.05, (n2 - last) / 1000); last = n2; drawParts(dt); drawZaps(dt); const alive = parts.length || zaps.length; fxRAF = alive ? requestAnimationFrame(tick) : 0; if (!alive) fctx.clearRect(0, 0, innerWidth, innerHeight); }; fxRAF = requestAnimationFrame(tick); } }
+let zapBox = null;
+function ensureFx(){ if (!fxRAF) { let last = performance.now(); const tick = n2 => { const dt = Math.min(.05, (n2 - last) / 1000); last = n2;
+  if (parts.length || !zapBox) fctx.clearRect(0, 0, innerWidth, innerHeight); else fctx.clearRect(zapBox[0], zapBox[1], zapBox[2], zapBox[3]);
+  drawParts(dt); drawZaps(dt); const alive = parts.length || zaps.length; fxRAF = alive ? requestAnimationFrame(tick) : 0; if (!alive) { fctx.clearRect(0, 0, innerWidth, innerHeight); fx.style.visibility = 'hidden'; } }; sizeFx(); fx.style.visibility = 'visible'; fxRAF = requestAnimationFrame(tick); } }
 function boltPath(x, y, ang, len, segs){
   const pts = [[x, y]]; let px = x, py = y;
   for (let i = 1; i <= segs; i++) { const d = len * i / segs, j = (Math.random() - .5) * len * .22; px = x + Math.cos(ang) * d - Math.sin(ang) * j; py = y + Math.sin(ang) * d + Math.cos(ang) * j; pts.push([px, py]); }
   return pts;
 }
+const starSpr = {};
+function starSprite(c){
+  if (starSpr[c]) return starSpr[c];
+  const n = 64, cv2 = document.createElement('canvas'); cv2.width = cv2.height = n; const g = cv2.getContext('2d');
+  g.translate(n / 2, n / 2); g.globalAlpha = .45; g.fillStyle = c; star(g, 0, 0, n / 2, 0); g.globalAlpha = 1; g.fillStyle = '#ffffff'; star(g, 0, 0, n / 4, 0);
+  return (starSpr[c] = cv2);
+}
 function electricPop(cx, cy, w, h){
-  const [glow] = kindColors(), n = 8;
+  const [glow] = kindColors(), n = 8, reach = Math.max(Math.min(innerWidth, innerHeight) * .55, Math.max(w, h) * .75 * 1.25);
+  zapBox = [Math.floor(cx - reach - 30), Math.floor(cy - reach - 30), Math.ceil(reach * 2 + 60), Math.ceil(reach * 2 + 60)];
   zaps.push({ type: 'flash', x: cx, y: cy, r: Math.max(w, h) * .75, age: 0, life: .32 });
   for (let i = 0; i < n; i++) {
     const ang = (i / n) * Math.PI * 2 + (Math.random() - .5) * .5, len = Math.min(innerWidth, innerHeight) * (.28 + Math.random() * .22);
@@ -808,7 +824,7 @@ function star(g, x, y, r, rot){
 }
 function drawZaps(dt){
   if (!zaps.length) return;
-  const g = fctx; g.save(); g.globalCompositeOperation = 'lighter';
+  const g = fctx; g.save();
   zaps = zaps.filter(z => {
     z.age += dt; const t = z.age - (z.delay || 0); if (t < 0) return true; const u = t / z.life; if (u >= 1) return false;
     if (z.type === 'flash') {
@@ -816,18 +832,18 @@ function drawZaps(dt){
     } else if (z.type === 'bolt') {
       z.t -= dt; if (z.t <= 0 || !z.pts) { z.t = .035; const grow = Math.min(1, t / .09); z.pts = boltPath(z.x, z.y, z.ang, z.len * grow, 9); z.br = boltPath(z.pts[4][0], z.pts[4][1], z.ang + (Math.random() > .5 ? .7 : -.7), z.len * .35 * grow, 5); }
       const a = (1 - u) * (Math.random() > .15 ? 1 : .35);
-      [[z.c, 7, .35 * a], [z.c, 3.2, .9 * a], ['#ffffff', 1.4, a]].forEach(([c, lw, al]) => {
+      [[z.c, 6, .4 * a], ['#ffffff', 2, a]].forEach(([c, lw, al]) => {
         g.strokeStyle = c; g.lineWidth = lw; g.globalAlpha = al; g.lineJoin = 'round'; g.lineCap = 'round';
         [z.pts, z.br].forEach(pp => { g.beginPath(); pp.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.stroke(); });
       });
     } else {
-      z.x += z.vx * dt; z.y += z.vy * dt; const sc = Math.sin(u * Math.PI), r = z.size * sc;
-      g.globalAlpha = .45 * sc; g.fillStyle = z.c; star(g, z.x, z.y, r * 1.9, z.spin + u);
-      g.globalAlpha = sc; g.fillStyle = '#ffffff'; star(g, z.x, z.y, r, z.spin + u);
+      z.x += z.vx * dt; z.y += z.vy * dt; const sc = Math.sin(u * Math.PI), r = z.size * sc * 1.9;
+      if (r > .5) { g.globalAlpha = sc; g.drawImage(starSprite(z.c), z.x - r, z.y - r, r * 2, r * 2); }
     }
     return true;
   });
   g.restore(); g.globalAlpha = 1;
+  if (!zaps.length) zapBox = null;
 }
 function homeBurst(n, cx, cy, w, h, tgt, onHit){
   const [glow, light, deep] = kindColors(), a = actors[selected], cols = [glow, light, '#ffffff', deep, a ? a.pal[0] : glow];
@@ -844,7 +860,7 @@ function ringPulse(x, y){
   ring.animate([{ transform: 'scale(.3)', opacity: 1 }, { transform: 'scale(1.55)', opacity: 0 }], { duration: 560, easing: 'cubic-bezier(.2,.7,.3,1)' });
 }
 function drawParts(dt){
-  fctx.clearRect(0, 0, innerWidth, innerHeight);
+  if (!parts.length) return;
   const add = [];
   parts = parts.filter(p => {
     if (p.home) {
@@ -883,7 +899,7 @@ function sweepGlare(){ if (RM) return; glare.animate([{ transform: 'translateX(-
 function startIntro(mode, origin){
   stopIntro();
   const st = { mode, anims: [], landed: false, done: false, t0: performance.now() };
-  intro = st; sizeFx(); mask.hidden = true;
+  intro = st; mask.hidden = true;
   const r = flipper.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
   [shade, flipper, $('cardNav'), beam, cflash].forEach(el => el.getAnimations().forEach(an => an.cancel()));
   rays.style.translate = (cx - rays.offsetWidth / 2) + 'px ' + (cy - rays.offsetHeight / 2) + 'px';
@@ -938,7 +954,7 @@ function closeCard(){
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   };
   if (RM) { finish(); return; }
-  closing = true; sizeFx();
+  closing = true;
   const r = flipper.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
   nav.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-out', fill: 'forwards' });
   cflash.animate([{ opacity: 0 }, { opacity: .95 }], { duration: 150, easing: 'cubic-bezier(.3,0,.6,1)', fill: 'forwards' });

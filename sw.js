@@ -1,5 +1,5 @@
 // Work Pix service worker: the app opens offline; the team list refreshes whenever there is a connection.
-const CACHE = 'work-pix-v2';
+const CACHE = 'work-pix-v3';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'crew.json',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'];
 
