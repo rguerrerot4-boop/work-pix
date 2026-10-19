@@ -832,7 +832,7 @@ ransom($('title')); ransom($('teamTitle'));
 
 /* ---------- tabs & toast ---------- */
 let toastT = 0;
-function showToast(){ const t = $('toast'); t.classList.remove('off'); clearTimeout(toastT); toastT = setTimeout(hideToast, 4500); }
+function showToast(msg){ const t = $('toast'); t.textContent = msg || 'Toca a un personaje'; t.classList.remove('off'); clearTimeout(toastT); toastT = setTimeout(hideToast, 4500); }
 function hideToast(){ $('toast').classList.add('off'); }
 function showView(v){
   sfx.tab();
@@ -1206,22 +1206,33 @@ function fmtSync(iso){ try { const d = new Date(iso); return 'Actualizado ' + d.
 buildWorld(12); resize(); requestAnimationFrame(render);
 /* ---------- retro sound: everything is synthesised live (square/triangle waves + noise), no audio files ---------- */
 const Snd = (() => {
-  let ac = null, master, sfx, mus, noiseBuf, musicTimer = 0, step = 0, nextAt = 0, lastStep = 0, lastKey = 0;
+  let ac = null, master, sfx, mus, noiseBuf, musicTimer = 0, step = 0, nextAt = 0, lastStep = 0, lastKey = 0, primed = false;
+  const SILENT = 'data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
   let mode = 'all'; try { mode = localStorage.getItem('wp-sound') || 'all'; } catch (e) {}
   const N = n => 440 * Math.pow(2, (n - 69) / 12);                      // midi note -> Hz
+  // Must run inside a tap (touchend / click / pointerup). Safe to call on every tap.
   function unlock(){
     try {
+      // iPhone: treat our sound like music playback so the silent switch doesn't mute it (Safari 17+)
+      try { if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback'; } catch (e) {}
       if (!ac) {
         const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-        ac = new AC(); master = ac.createGain(); master.gain.value = .55; master.connect(ac.destination);
+        ac = new AC(); master = ac.createGain(); master.gain.value = .8; master.connect(ac.destination);
         sfx = ac.createGain(); sfx.connect(master); mus = ac.createGain(); mus.connect(master);
-        noiseBuf = ac.createBuffer(1, ac.sampleRate * .5, ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        noiseBuf = ac.createBuffer(1, Math.floor(ac.sampleRate * .5), ac.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
         apply();
       }
-      if (ac.state !== 'running') ac.resume();
+      if (!primed) {
+        primed = true;
+        // older iPhones: playing a silent clip inside the tap switches the audio session to playback
+        try { const el = new Audio(SILENT); el.setAttribute('playsinline', ''); el.volume = 0.01; const pr = el.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (e) {}
+        // a silent buffer started inside the tap "wakes up" Web Audio on iOS
+        try { const b = ac.createBuffer(1, 1, 22050), src = ac.createBufferSource(); src.buffer = b; src.connect(ac.destination); src.start(0); } catch (e) {}
+      }
+      if (ac.state !== 'running') { const pr = ac.resume(); if (pr && pr.then) pr.then(() => { if (mode === 'all') { nextAt = ac.currentTime + .05; music(true); } }).catch(() => {}); }
     } catch (e) {}
   }
-  const ready = () => ac && ac.state === 'running' && mode !== 'off';
+  const ready = () => ac && ac.state !== 'closed' && mode !== 'off';
   function apply(){
     if (!ac) return;
     sfx.gain.value = mode === 'off' ? 0 : 1;
@@ -1247,7 +1258,7 @@ const Snd = (() => {
   // ---- chiptune loop: C - Am - F - G, soft lead arpeggio, triangle bass, noise hats
   const PROG = [[48, 60, 64, 67], [45, 57, 60, 64], [41, 53, 57, 60], [43, 55, 59, 62]], SPB = 60 / 104 / 4;
   function schedule(){
-    if (!ac || mode !== 'all' || document.hidden || ac.state !== 'running') return;
+    if (!ac || mode !== 'all' || document.hidden || ac.state !== 'running') { if (ac) nextAt = ac.currentTime + .05; return; }
     while (nextAt < ac.currentTime + .25) {
       const bar = Math.floor(step / 16) % 4, s16 = step % 16, ch = PROG[bar], t = nextAt - ac.currentTime;
       if (s16 % 4 === 0) tone(N(ch[0]), SPB * 3.2, { type: 'triangle', v: .35, at: t, dest: mus });
@@ -1284,7 +1295,7 @@ const Snd = (() => {
     avalanche: () => { for (let i = 0; i < 10; i++) noise(.05, { lp: 600 + i * 120, v: .08, at: i * .05 }); arp([60, 64, 67, 72, 76, 79, 84], .06, { v: .08, d: .08, at: .45 }); }
   };
   function setMode(m){ mode = m; try { localStorage.setItem('wp-sound', m); } catch (e) {} apply(); }
-  return { unlock, fx, setMode, mode: () => mode, isOn: () => mode !== 'off' };
+  return { unlock, fx, setMode, mode: () => mode, isOn: () => mode !== 'off', state: () => (ac ? ac.state : 'none') };
 })();
 const sfx = Snd.fx;
 const SND_ICONS = {
@@ -1299,7 +1310,8 @@ $('sndBtn').onclick = () => { const m = Snd.mode(), nx = m === 'all' ? 'sfx' : m
 // characters only make noise when you can see them
 function onScreen(a){ if (splashOn || !ov.hidden || !$('viewTeam').hidden) return false; const [fx, fy] = iso(a.x, a.y), x = (fx - cam.x) * S, y = (fy - cam.y) * S; return x > -20 && x < vw + 20 && y > 0 && y < vh + 40; }
 function cheer(a, v){ a.cheer = v; if (onScreen(a)) sfx.jump(); }
-document.addEventListener('pointerdown', e => { Snd.unlock(); const b = e.target.closest && e.target.closest('.pbtn'); if (b) sfx.tap(({ zIn: 3, zOut: -3, prev: -2, next: 2, close: 0 })[b.id] || 0); }, true);
+['touchend', 'pointerup', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, () => Snd.unlock(), { capture: true, passive: true }));
+document.addEventListener('pointerdown', e => { const b = e.target.closest && e.target.closest('.pbtn'); if (b) sfx.tap(({ zIn: 3, zOut: -3, prev: -2, next: 2, close: 0 })[b.id] || 0); }, true);
 
 /* ---------- launch splash: typing, wink, then a retro pixel avalanche into the app ----------
    Plays on every launch and again whenever you come back after the app sat in the background.
@@ -1359,7 +1371,8 @@ const Splash = (() => {
     const step = now => {
       if (prev) at += Math.min(.05, (now - prev) / 1000); prev = now;
       fg.clearRect(0, 0, W, H);
-      if (!swapped && at > .6) { swapped = true; el.hidden = true; splashOn = false; if (crew.length) showToast(); }
+      if (!swapped && at > .6) { swapped = true; el.hidden = true; splashOn = false; if (crew.length) showToast();
+        setTimeout(() => { if (Snd.isOn() && Snd.state() !== 'running') { showToast('Toca la pantalla para activar el sonido'); } }, 900); }
       let alive = 0;
       for (const k of cells) {
         if (at < k.inAt) continue;
@@ -1399,7 +1412,7 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
