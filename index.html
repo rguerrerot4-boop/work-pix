@@ -127,9 +127,8 @@ body[data-view="team"] .zoom{display:none}
 .fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:60}
 .ring{position:fixed;left:0;top:0;width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;border:10px solid var(--rc,#ffd84a);
   box-shadow:0 0 26px 6px var(--rc,#ffd84a),inset 0 0 26px 6px var(--rc,#ffd84a);opacity:0;pointer-events:none;z-index:3}
-.rays{position:fixed;width:150vmax;height:150vmax;left:0;top:0;pointer-events:none;opacity:0;z-index:1;
-  background:repeating-conic-gradient(from 0deg,rgba(255,216,74,.45) 0deg 5deg,transparent 5deg 15deg);
-  -webkit-mask:radial-gradient(circle,#000 0 6%,transparent 38%);mask:radial-gradient(circle,#000 0 6%,transparent 38%)}
+.rays{position:fixed;width:110vmax;height:110vmax;left:0;top:0;pointer-events:none;opacity:0;z-index:1;background-size:100% 100%;will-change:transform,opacity}
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:7}
 .beam{position:fixed;pointer-events:none;opacity:0;z-index:1;
   background:linear-gradient(0deg,rgba(125,255,231,.75),rgba(125,255,231,.08) 70%,transparent);
   clip-path:polygon(42% 100%,58% 100%,100% 0,0 0)}
@@ -148,7 +147,7 @@ body[data-view="team"] .zoom{display:none}
 .back-title{font-family:var(--f-display);font-weight:700;font-size:30px;line-height:1;color:var(--ink);letter-spacing:2px}
 .back-sub{font-family:var(--f-label);font-size:13px;letter-spacing:.3em;color:var(--sel)}
 .mask{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
-.glare{position:absolute;inset:-30% -60%;pointer-events:none;z-index:6;opacity:0;
+.glare{position:absolute;inset:-30% -60%;pointer-events:none;z-index:6;opacity:0;will-change:transform,opacity;
   background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.6) 48%,rgba(255,255,255,.15) 52%,transparent 58%)}
 .card-top{display:flex;align-items:center;gap:10px;font-family:var(--f-label);font-size:12px;letter-spacing:.06em}
 .stripes{height:14px;flex:1;background:repeating-linear-gradient(-45deg,var(--outline) 0 6px,transparent 6px 10px);border:2px solid var(--outline)}
@@ -231,6 +230,7 @@ body[data-view="team"] .zoom{display:none}
         <div class="meta"><span>Sombrero: <b id="cHat"></b></span><span class="tech" id="cTech"></span></div>
         <canvas class="mask" id="mask" hidden></canvas>
         <div class="glare" id="glare"></div>
+        <div class="flash" id="cflash"></div>
       </div>
       <div class="card-back" aria-hidden="true">
         <div class="back-inner">
@@ -516,6 +516,7 @@ $('zOut').onclick = () => zoomTo(Math.round(St) - 1);
 
 /* ---------- scene render ---------- */
 function render(now){
+  if (!ov.hidden && !closing && !intro) { t0 = now; requestAnimationFrame(render); return; }   // card fully open: let the GPU rest
   const dt = Math.min(.05, (now - t0) / 1000); t0 = now; T += dt;
   update(dt); stepCamera(dt);
   drawLogo(logoCtx, RM ? 0.4 : T);
@@ -725,7 +726,18 @@ function drawCard(){
 
 /* ---------- card intro: spin, flash, pixel projection ---------- */
 const flipper = $('flipper'), mask = $('mask'), mctx = mask.getContext('2d'), fx = $('fx'), fctx = fx.getContext('2d');
-const rays = $('rays'), beam = $('beam'), glare = $('glare'), shade = $('shade');
+const rays = $('rays'), beam = $('beam'), glare = $('glare'), shade = $('shade'), cflash = $('cflash');
+(function bakeRays(){
+  const c = document.createElement('canvas'), n = 512, g = c.getContext('2d'); c.width = c.height = n;
+  const gr = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2);
+  gr.addColorStop(0, 'rgba(255,216,74,.55)'); gr.addColorStop(.2, 'rgba(255,216,74,.35)'); gr.addColorStop(.75, 'rgba(255,216,74,0)');
+  g.fillStyle = gr;
+  for (let i = 0; i < 24; i++) { const a0 = i / 24 * Math.PI * 2, a1 = a0 + Math.PI / 36; g.beginPath(); g.moveTo(n / 2, n / 2); g.arc(n / 2, n / 2, n / 2, a0, a1); g.closePath(); g.fill(); }
+  rays.style.backgroundImage = 'url(' + c.toDataURL() + ')';
+})();
+const flashSpr = (() => { const c = document.createElement('canvas'), n = 256, g = c.getContext('2d'); c.width = c.height = n;
+  const gr = g.createRadialGradient(n / 2, n / 2, 0, n / 2, n / 2, n / 2); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(191,247,236,.55)'); gr.addColorStop(1, 'rgba(191,247,236,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, n, n); return c; })();
 let intro = null, parts = [], fxRAF = 0;
 function kindColors(){ return card.dataset.kind === 'connector' ? ['#7dffe7', '#bff7ec', '#2ec4a8'] : ['#ffd84a', '#fff3b0', '#ff8f3a']; }
 function prepMask(st){
@@ -768,7 +780,7 @@ function burst(n, cx, cy, w, h){
   }
   ensureFx();
 }
-function sizeFx(){ const d = Math.min(2, window.devicePixelRatio || 1); fx.width = Math.round(innerWidth * d); fx.height = Math.round(innerHeight * d); fctx.setTransform(d, 0, 0, d, 0, 0); }
+function sizeFx(){ const d = Math.min(1.5, window.devicePixelRatio || 1), w = Math.round(innerWidth * d), h = Math.round(innerHeight * d); if (fx.width !== w || fx.height !== h) { fx.width = w; fx.height = h; } fctx.setTransform(d, 0, 0, d, 0, 0); }
 let zaps = [];
 function ensureFx(){ if (!fxRAF) { let last = performance.now(); const tick = n2 => { const dt = Math.min(.05, (n2 - last) / 1000); last = n2; drawParts(dt); drawZaps(dt); const alive = parts.length || zaps.length; fxRAF = alive ? requestAnimationFrame(tick) : 0; if (!alive) fctx.clearRect(0, 0, innerWidth, innerHeight); }; fxRAF = requestAnimationFrame(tick); } }
 function boltPath(x, y, ang, len, segs){
@@ -777,13 +789,13 @@ function boltPath(x, y, ang, len, segs){
   return pts;
 }
 function electricPop(cx, cy, w, h){
-  const [glow] = kindColors(), n = 11;
+  const [glow] = kindColors(), n = 8;
   zaps.push({ type: 'flash', x: cx, y: cy, r: Math.max(w, h) * .75, age: 0, life: .32 });
   for (let i = 0; i < n; i++) {
     const ang = (i / n) * Math.PI * 2 + (Math.random() - .5) * .5, len = Math.min(innerWidth, innerHeight) * (.28 + Math.random() * .22);
     zaps.push({ type: 'bolt', x: cx + Math.cos(ang) * w * .2, y: cy + Math.sin(ang) * h * .2, ang, len, age: 0, life: .34 + Math.random() * .18, delay: Math.random() * .08, c: i % 3 ? glow : '#ffffff', t: 0 });
   }
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 18; i++) {
     const ang = Math.random() * Math.PI * 2, rr = 30 + Math.random() * Math.min(innerWidth, innerHeight) * .42;
     zaps.push({ type: 'glint', x: cx + Math.cos(ang) * rr, y: cy + Math.sin(ang) * rr * .9, vx: Math.cos(ang) * 40, vy: Math.sin(ang) * 40 - 20, size: 5 + Math.random() * 11, age: 0, delay: .04 + Math.random() * .32, life: .38 + Math.random() * .32, c: i % 4 ? '#ffffff' : glow, spin: Math.random() * Math.PI });
   }
@@ -800,9 +812,7 @@ function drawZaps(dt){
   zaps = zaps.filter(z => {
     z.age += dt; const t = z.age - (z.delay || 0); if (t < 0) return true; const u = t / z.life; if (u >= 1) return false;
     if (z.type === 'flash') {
-      const gr = g.createRadialGradient(z.x, z.y, 0, z.x, z.y, z.r * (.6 + u * .6));
-      gr.addColorStop(0, 'rgba(255,255,255,' + (1 - u) + ')'); gr.addColorStop(.4, 'rgba(191,247,236,' + (1 - u) * .5 + ')'); gr.addColorStop(1, 'rgba(191,247,236,0)');
-      g.fillStyle = gr; g.fillRect(z.x - z.r * 1.3, z.y - z.r * 1.3, z.r * 2.6, z.r * 2.6);
+      const rad = z.r * (.6 + u * .6); g.globalAlpha = 1 - u * u; g.drawImage(flashSpr, z.x - rad, z.y - rad, rad * 2, rad * 2);
     } else if (z.type === 'bolt') {
       z.t -= dt; if (z.t <= 0 || !z.pts) { z.t = .035; const grow = Math.min(1, t / .09); z.pts = boltPath(z.x, z.y, z.ang, z.len * grow, 9); z.br = boltPath(z.pts[4][0], z.pts[4][1], z.ang + (Math.random() > .5 ? .7 : -.7), z.len * .35 * grow, 5); }
       const a = (1 - u) * (Math.random() > .15 ? 1 : .35);
@@ -875,7 +885,7 @@ function startIntro(mode, origin){
   const st = { mode, anims: [], landed: false, done: false, t0: performance.now() };
   intro = st; sizeFx(); mask.hidden = true;
   const r = flipper.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  [shade, flipper, $('cardNav'), beam].forEach(el => el.getAnimations().forEach(an => an.cancel()));
+  [shade, flipper, $('cardNav'), beam, cflash].forEach(el => el.getAnimations().forEach(an => an.cancel()));
   rays.style.translate = (cx - rays.offsetWidth / 2) + 'px ' + (cy - rays.offsetHeight / 2) + 'px';
   Object.assign(beam.style, { left: (cx - r.width * .75) + 'px', width: (r.width * 1.5) + 'px', top: (r.top + 20) + 'px', height: (r.height + 70) + 'px' });
   if (RM) {
@@ -883,18 +893,19 @@ function startIntro(mode, origin){
     st.anims.push(shade.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, fill: 'both' }));
   } else if (mode === 'full') {
     const o = origin || { x: cx, y: innerHeight }, dx = (o.x - cx) / cardZoom, dy = (o.y - cy) / cardZoom;
-    st.landAt = 1100; st.projDur = 0;
-    st.anims.push(shade.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 450, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'both' }));
+    st.landAt = 760; st.projDur = 0;
+    st.anims.push(shade.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 360, easing: 'cubic-bezier(.33,0,.2,1)', fill: 'both' }));
     st.anims.push(flipper.animate([
-      { transform: `translate(${dx}px,${dy}px) scale(.15) rotateY(540deg)`, opacity: 0 },
-      { opacity: 1, offset: .18 },
-      { transform: 'none', opacity: 1 }
-    ], { duration: st.landAt, easing: 'cubic-bezier(.16,1,.3,1)' }));
+      { transform: `translate3d(${dx}px,${dy}px,0) scale(.18) rotateY(200deg)`, opacity: 0, easing: 'cubic-bezier(.2,.8,.3,1)' },
+      { opacity: 1, offset: .15 },
+      { transform: 'translate3d(0,-6px,0) scale(1.035) rotateY(-6deg)', opacity: 1, offset: .72, easing: 'cubic-bezier(.4,0,.3,1)' },
+      { transform: 'translate3d(0,0,0) scale(1) rotateY(0deg)', opacity: 1 }
+    ], { duration: st.landAt, easing: 'linear' }));
   } else {
-    st.landAt = 620; st.projDur = 0;
+    st.landAt = 520; st.projDur = 0;
     st.anims.push(flipper.animate([
-      { transform: 'rotateY(0deg) scale(1)' }, { transform: 'rotateY(-180deg) scale(.94)', offset: .5 }, { transform: 'rotateY(-360deg) scale(1)' }
-    ], { duration: st.landAt, easing: 'cubic-bezier(.65,0,.35,1)' }));
+      { transform: 'rotateY(0deg) scale(1)' }, { transform: 'rotateY(-180deg) scale(.95)', offset: .5 }, { transform: 'rotateY(-360deg) scale(1)' }
+    ], { duration: st.landAt, easing: 'cubic-bezier(.45,0,.25,1)' }));
   }
   const tick = now => {
     if (intro !== st) return;
@@ -906,7 +917,7 @@ function startIntro(mode, origin){
         const rr = flipper.getBoundingClientRect();
         if (!RM) {
           ringPulse(rr.left + rr.width / 2, rr.top + rr.height / 2);
-          if (st.mode === 'full') st.anims.push(rays.animate([{ opacity: 0, transform: 'rotate(0deg) scale(.6)' }, { opacity: .8, transform: 'rotate(20deg) scale(1)', offset: .3 }, { opacity: 0, transform: 'rotate(60deg) scale(1.1)' }], { duration: 1600, easing: 'cubic-bezier(.4,0,.2,1)' }));
+          if (st.mode === 'full') st.anims.push(rays.animate([{ opacity: 0, transform: 'rotate(0deg) scale(.7)' }, { opacity: .85, transform: 'rotate(12deg) scale(1)', offset: .25 }, { opacity: 0, transform: 'rotate(40deg) scale(1.08)' }], { duration: 1400, easing: 'cubic-bezier(.3,0,.2,1)' }));
         }
       }
       mask.hidden = true; st.done = true; sweepGlare(); intro = null; return;
@@ -922,29 +933,22 @@ function closeCard(){
   stopIntro();
   const nav = $('cardNav'), a = actors[selected];
   const finish = () => {
-    [flipper, shade, nav, beam].forEach(el => el.getAnimations().forEach(an => an.cancel()));
+    [flipper, shade, nav, beam, cflash].forEach(el => el.getAnimations().forEach(an => an.cancel()));
     mask.hidden = true; ov.hidden = true; closing = false; selected = -1;
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
   };
   if (RM) { finish(); return; }
   closing = true; sizeFx();
   const r = flipper.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  const st = {}; prepMask(st);
-  nav.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: 'forwards' });
-  const t0 = performance.now();
-  const glow = now => { if (!closing) return; const q = Math.min(1, (now - t0) / 170); mctx.clearRect(0, 0, st.W, st.H); mctx.fillStyle = 'rgba(255,255,255,' + (q * .95) + ')'; mctx.fillRect(0, 0, st.W, st.H); if (q < 1) requestAnimationFrame(glow); };
-  requestAnimationFrame(glow);
+  nav.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-out', fill: 'forwards' });
+  cflash.animate([{ opacity: 0 }, { opacity: .95 }], { duration: 150, easing: 'cubic-bezier(.3,0,.6,1)', fill: 'forwards' });
   flipper.animate([
-    { transform: 'none', opacity: 1 },
-    { transform: 'scale(1.09)', opacity: 1, offset: .6 },
-    { transform: 'scale(.2)', opacity: 0 }
-  ], { duration: 280, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'forwards' });
-  setTimeout(() => {
-    electricPop(cx, cy, r.width, r.height);
-    ringPulse(cx, cy);
-    if (a) a.flash = 1;
-    shade.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 340, easing: 'ease-out', fill: 'forwards' }).onfinish = finish;
-  }, 200);
+    { transform: 'translate3d(0,0,0) scale(1)', opacity: 1, easing: 'cubic-bezier(.3,0,.5,1)' },
+    { transform: 'translate3d(0,-4px,0) scale(1.06)', opacity: 1, offset: .42, easing: 'cubic-bezier(.5,0,.8,.4)' },
+    { transform: 'translate3d(0,0,0) scale(.55)', opacity: 0 }
+  ], { duration: 280, easing: 'linear', fill: 'forwards' });
+  setTimeout(() => { electricPop(cx, cy, r.width, r.height); ringPulse(cx, cy); if (a) a.flash = 1; }, 130);
+  shade.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 420, delay: 100, easing: 'cubic-bezier(.33,0,.2,1)', fill: 'forwards' }).onfinish = finish;
 }
 $('close').onclick = e => { e.stopPropagation(); closeCard(); };
 $('prev').onclick = e => { e.stopPropagation(); openCard((selected - 1 + actors.length) % actors.length, 'swap'); };
