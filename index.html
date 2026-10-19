@@ -136,6 +136,12 @@ body[data-view="team"] .zoom{display:none}
 .mate small{font-family:var(--f-comic);font-size:14px;letter-spacing:.06em;padding:0 6px;transform:rotate(-3deg)}
 .mate small.skill{background:var(--amber);color:var(--ink0)} .mate small.connector{background:var(--teal);color:var(--ink0)}
 .mate .rl{font-size:12px;line-height:1.25;color:#cfc9e0}
+/* speech bubbles */
+.bubbles{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
+.bub{position:absolute;left:0;top:0;padding:5px 8px 6px;background:#fff;color:#1b1428;border:2px solid #1b1428;box-shadow:3px 3px 0 #1b1428;
+  font-family:var(--f-display);font-weight:700;font-size:12px;line-height:1.1;white-space:nowrap;will-change:transform;animation:bubIn .2s steps(3) both}
+.bub::after{content:"";position:absolute;left:50%;bottom:-8px;width:10px;height:7px;margin-left:-5px;background:#1b1428;clip-path:polygon(0 0,100% 0,50% 100%)}
+@keyframes bubIn{from{opacity:0;translate:0 5px}to{opacity:1;translate:0 0}}
 /* launch splash */
 .splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#0d0c11;
   background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 2px,transparent 2px 4px);cursor:pointer}
@@ -347,7 +353,7 @@ function drawCreature(ctx, x, y, o){
   const st = o.step || 0;
   R(ctx, x+1, y+10, 5, 4 - (st===1?1:0), OUT); R(ctx, x+8, y+10, 5, 4 - (st===2?1:0), OUT);
   R(ctx, x+2, y+11, 3, 2 - (st===1?1:0), s); R(ctx, x+9, y+11, 3, 2 - (st===2?1:0), s);
-  const lay = o.waveL ? y+1 : y+5, ray = o.wave ? y+1 : y+5;
+  const lay = o.waveL ? y+1 : y+5 + (o.typeL || 0), ray = o.wave ? y+1 : y+5 + (o.typeR || 0);
   R(ctx, x-3, lay-1, 4, o.waveL?6:5, OUT); R(ctx, x-2, lay, 2, o.waveL?4:3, m);
   R(ctx, x+13, ray-1, 4, o.wave?6:5, OUT); R(ctx, x+14, ray, 2, o.wave?4:3, m);
   R(ctx, x+1, y-1, 12, 1, OUT); R(ctx, x-1, y+1, 1, 9, OUT); R(ctx, x+14, y+1, 1, 9, OUT); R(ctx, x+1, y+11, 12, 1, OUT);
@@ -368,10 +374,11 @@ function drawCreature(ctx, x, y, o){
 }
 // cached sprite frames: body top-left sits at (5,10) inside a 24x30 canvas
 const sprCache = new Map();
-function creatureSprite(a, blink, look, step, wave){
-  const key = a.hat + '|' + a.pal[0] + '|' + (blink ? 1 : 0) + '|' + look + '|' + step + '|' + (wave ? 1 : 0);
+function creatureSprite(a, blink, look, step, wave, typeL, typeR){
+  typeL = typeL || 0; typeR = typeR || 0;
+  const key = a.hat + '|' + a.pal[0] + '|' + (blink ? 1 : 0) + '|' + look + '|' + step + '|' + (wave ? 1 : 0) + '|' + typeL + typeR;
   let c = sprCache.get(key);
-  if (!c) { c = document.createElement('canvas'); c.width = 24; c.height = 30; drawCreature(c.getContext('2d'), 5, 10, { pal: a.pal, hat: a.hat, blink, look, step, wave }); sprCache.set(key, c); }
+  if (!c) { c = document.createElement('canvas'); c.width = 24; c.height = 30; drawCreature(c.getContext('2d'), 5, 10, { pal: a.pal, hat: a.hat, blink, look, step, wave, typeL, typeR }); sprCache.set(key, c); }
   return c;
 }
 
@@ -487,11 +494,27 @@ function bakeDesk(a){
     box(g, x0 + .7, y0 + 1.82, .6, .12, 10, 6, '#7a9370', '#5f7856', '#4d6346');
   });
   const cp = iso(x0 + 1.05, y0 + .44, 16.5); a.cursor = [Math.round(cp[0]), Math.round(cp[1])];
+  const sc = iso(x0 + .85, y0 + .44, 24); a.scr = [Math.round(sc[0]), Math.round(sc[1])];
 }
 
 /* ---------- crew & simulation ---------- */
 let crew = [], actors = [], filter = 'all', selected = -1, hoverA = null;
-const ERRANDS = [[2.6,1.3],[5.4,1.25],[12.7,1.3],[7.5,1.2],[9.9,1.3]];
+const ERRANDS = [{ x: 2.6, y: 1.3, k: 'coffee' }, { x: 5.4, y: 1.25, k: 'water' }, { x: 12.7, y: 1.3, k: 'printer' }, { x: 7.5, y: 1.2, k: 'window' }, { x: 9.9, y: 1.3, k: 'plant' }];
+const ERRAND_LINES = { coffee: ['¡Cafecito!', 'Café doble, porfa', 'Necesito cafeína'], water: ['Glu glu', 'Hidratándome', 'Agüita fresca'],
+  printer: ['Imprimiendo…', '¿Salió mi hoja?', 'Se atascó otra vez'], window: ['Qué vista', '¿Ya es de noche?', 'Un respiro'], plant: ['Hola plantita', 'Te riego luego'] };
+const CHAT = [['¿Café?', '¡Dale, vamos!'], ['¿Cómo vas?', 'Ya casi termino'], ['Te paso el archivo', '¡Gracias!'], ['¿Reunión a las 3?', 'Ahí estaré'],
+  ['¿Viste al nuevo?', '¡Sí, es un crack!'], ['¿Me ayudas?', 'Claro, dime'], ['Jajaja', 'Jajaja'], ['¿Pizza hoy?', '¡Obvio!'], ['Se cayó el wifi', 'Otra vez no…']];
+const WORK = [[/figma|design|motion|shader|slides|figjam|swift/, ['Moviendo pixeles', '¿Este azul o este?', 'Ajustando el diseño']],
+  [/canva/, ['¡Portada lista!', 'Probando colores']], [/adobe/, ['Quitando el fondo…', 'Editando el video']], [/bencher/, ['¿Más lento? Hmm', 'Midiendo velocidad']],
+  [/pdf/, ['Uniendo PDFs…', 'Llenando el formulario']], [/docx|word/, ['Corrigiendo el Word']], [/xlsx|excel/, ['Fórmulas y más fórmulas']],
+  [/pptx/, ['Diapositiva 7 de 10']], [/google/, ['Guardando en Drive']], [/browser|chrome/, ['Abriendo pestañas', 'Llenando formularios']],
+  [/computer/, ['Clic, clic, clic']], [/research/, ['Leyendo 40 fuentes', 'Comparando datos']], [/^docs$/, ['Escribiendo el doc']],
+  [/morning/, ['¡Buenos días!']], [/memory/, ['Recordando…']], [/skill-creator/, ['Nueva skill en camino']]];
+const GENERIC = ['Compilando…', '¡Listo!', 'Revisando…', 'Un ratito más', '¡Guardado!', 'Pensando…', 'Casi, casi…'];
+const anyOf = arr => arr[(Math.random() * arr.length) | 0];
+function workLine(a){ const n = (a.p.name || '').toLowerCase(); for (const [re, lines] of WORK) if (re.test(n)) return anyOf(Math.random() < .75 ? lines : GENERIC); return anyOf(GENERIC); }
+const env = { coffee: 0, printer: 0, water: 0 };
+let glyphs = [];
 function slot(i){ const col = i % 4, row = Math.floor(i / 4); return { x0: 1 + col * 3.2, y0: 3 + row * 3 }; }
 function makeActors(){
   const old = new Map(actors.map(a => [a.id, a]));
@@ -502,7 +525,26 @@ function makeActors(){
     bakeDesk(a); return a;
   });
 }
+function goPath(a, pts, purpose){ a.path = pts; a.purpose = purpose; a.state = 'walk'; }
+function homePath(a){ return [[a.x, 2.15], [a.home[0], 2.15], [a.home[0], a.home[1]]]; }
+function arrived(a){
+  a.sp = 0; a.look = 0;
+  if (a.purpose === 'errand') { a.state = 'errandAt'; a.wait = 2 + Math.random() * 1.5; say(a, anyOf(ERRAND_LINES[a.errand.k]), 2); if (a.errand.k in env) env[a.errand.k] = 1.6; }
+  else if (a.purpose === 'chat' && a.partner) { a.state = 'waitchat'; a.wait = 6; a.look = a.x < a.partner.x ? 1 : -1; }
+  else { a.state = 'home'; a.wait = 2 + Math.random() * 6; }
+}
+function tryChat(a){
+  const c = actors.filter(b => b !== a && (!b.state || b.state === 'home') && !b.path.length && Math.abs(b.home[0] - a.home[0]) <= 6.5 && Math.abs(b.home[1] - a.home[1]) <= 6.5);
+  if (!c.length) return false;
+  const b = anyOf(c), mx = Math.max(1.6, Math.min(C - 1.6, (a.home[0] + b.home[0]) / 2));
+  const [l, r] = a.home[0] <= b.home[0] ? [a, b] : [b, a];
+  a.partner = b; b.partner = a; a.chatLead = true; b.chatLead = false;
+  goPath(l, [[l.home[0], 2.15], [mx - .45, 2.15]], 'chat'); goPath(r, [[r.home[0], 2.15], [mx + .45, 2.15]], 'chat');
+  return true;
+}
+function endChat(a){ const b = a.partner; [a, b].forEach(x => { if (!x) return; x.partner = null; x.chatLead = false; goPath(x, homePath(x), 'return'); }); }
 function update(dt){
+  for (const k in env) env[k] = Math.max(0, env[k] - dt);
   actors.forEach(a => {
     a.blinkT -= dt; if (a.blinkT < -0.12) a.blinkT = 2 + Math.random() * 4;
     if (a.flash > 0) a.flash = Math.max(0, a.flash - dt * 1.6);
@@ -510,21 +552,67 @@ function update(dt){
     if (RM) return;
     if (a.path.length) {
       const [tx, ty] = a.path[0], dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy);
-      a.sp = Math.min(1.6, a.sp + dt * 5);                       // ease into a walk
-      const sp = Math.min(a.sp, .5 + d * 3) * dt;               // ease out near the target
+      a.sp = Math.min(1.6, a.sp + dt * 5);
+      const sp = Math.min(a.sp, .5 + d * 3) * dt;
       a.look = Math.sign(dx - dy);
-      if (d <= sp) { a.x = tx; a.y = ty; a.path.shift(); if (!a.path.length) { a.sp = 0; a.wait = a.back ? 4 + Math.random() * 10 : 1.5 + Math.random() * 2.5; a.look = 0; } }
+      if (d <= sp) { a.x = tx; a.y = ty; a.path.shift(); if (!a.path.length) arrived(a); }
       else { a.x += dx / d * sp; a.y += dy / d * sp; }
       a.stepT += dt; if (a.stepT > .15) { a.stepT = 0; a.step = a.step === 1 ? 2 : 1; }
-    } else {
-      a.step = 0; a.wait -= dt;
-      if (a.wait <= 0) {
-        if (a.atErrand) { const [hx, hy] = a.home; a.path = [[a.x, 2.15], [hx, 2.15], [hx, hy]]; a.atErrand = false; a.back = true; }
-        else if (Math.random() < .35) { const e = ERRANDS[Math.floor(Math.random() * ERRANDS.length)], ex = e[0] + (Math.random() - .5) * .6; a.path = [[a.home[0], 2.15], [ex, 2.15], [ex, e[1]]]; a.atErrand = true; a.back = false; }
-        else { a.look = [-1, 0, 1][Math.floor(Math.random() * 3)]; a.wait = 2 + Math.random() * 5; }
+      return;
+    }
+    a.step = 0;
+    switch (a.state) {
+      case 'type':
+        a.typeT -= dt;
+        if (Math.random() < dt * 9) glyphs.push({ x: a.scr[0] + (Math.random() - .5) * 10, y: a.scr[1] - 2, l: .9, c: Math.random() < .3 ? '#ffffff' : a.screen });
+        if (a.typeT <= 0) { a.state = 'home'; a.wait = 1 + Math.random() * 3; a.look = 0; if (Math.random() < .3) { say(a, '¡Listo!', 1.4); a.cheer = .8; } }
+        break;
+      case 'errandAt': a.wait -= dt; if (a.wait <= 0) goPath(a, homePath(a), 'return'); break;
+      case 'waitchat':
+        a.wait -= dt;
+        if (!a.partner) { goPath(a, homePath(a), 'return'); break; }
+        if (a.chatLead && a.partner.state === 'waitchat') { a.state = a.partner.state = 'chat'; a.chatT = 0; a.said = 0; a.lines = anyOf(CHAT); }
+        else if (a.wait <= 0) endChat(a);
+        break;
+      case 'chat':
+        if (!a.chatLead) break;
+        a.chatT += dt;
+        if (a.said === 0 && a.chatT > .25) { say(a, a.lines[0], 1.7); a.said = 1; }
+        else if (a.said === 1 && a.chatT > 1.8) { say(a.partner, a.lines[1], 1.8); a.said = 2; if (a.lines[1].includes('!')) a.partner.cheer = .7; }
+        else if (a.chatT > 3.9) endChat(a);
+        break;
+      default: {
+        a.state = 'home'; a.wait -= dt;
+        if (a.wait > 0) break;
+        const r = Math.random();
+        if (r < .42) { a.state = 'type'; a.typeT = 4 + Math.random() * 6; a.look = -1; if (Math.random() < .45) say(a, workLine(a), 2.2); }
+        else if (r < .66) { const e = anyOf(ERRANDS), ex = e.x + (Math.random() - .5) * .6; a.errand = e; goPath(a, [[a.home[0], 2.15], [ex, 2.15], [ex, e.y]], 'errand'); }
+        else if (r < .84 && tryChat(a)) { /* walking to meet a teammate */ }
+        else { a.look = [-1, 0, 1][Math.floor(Math.random() * 3)]; a.wait = 2 + Math.random() * 4; }
       }
     }
   });
+  glyphs = glyphs.filter(g => (g.l -= dt) > 0);
+}
+
+/* ---------- speech bubbles (a small pool of DOM labels that follow the characters) ---------- */
+const bubWrap = document.createElement('div'); bubWrap.className = 'bubbles';
+const bubs = [];
+function say(a, text, dur){
+  if (!bubWrap.parentNode) $('stage').appendChild(bubWrap);
+  let b = bubs.find(x => x.a === a) || bubs.find(x => !x.a);
+  if (!b) { if (bubs.length >= 6) return; b = { el: document.createElement('div') }; b.el.className = 'bub'; bubWrap.appendChild(b.el); bubs.push(b); }
+  b.a = a; b.until = T + dur; b.el.textContent = text; b.el.hidden = false;
+  b.el.style.animation = 'none'; b.w = b.el.offsetWidth; b.el.style.animation = '';
+}
+function placeBubbles(){
+  for (const b of bubs) {
+    if (!b.a) continue;
+    if (T > b.until || !actors.includes(b.a)) { b.a = null; b.el.hidden = true; continue; }
+    const [fx, fy] = iso(b.a.x, b.a.y);
+    const half = (b.w || 80) / 2 + 6, sx = Math.max(half, Math.min(vw - half, (fx - cam.x) * S));
+    b.el.style.transform = 'translate(' + Math.round(sx) + 'px,' + Math.round((fy - 30 - cam.y) * S) + 'px) translate(-50%,-100%)';
+  }
 }
 function match(p){ return filter === 'all' || p.kind === filter; }
 
@@ -564,6 +652,7 @@ function render(now){
   requestAnimationFrame(render);
   if (now - lastLogo > 120) { lastLogo = now; drawLogo(logoCtx, RM ? 0.4 : now / 1000); }
   const covered = splashOn || !ov.hidden || !$('viewTeam').hidden;     // office not visible: skip all work
+  bubWrap.style.visibility = covered ? 'hidden' : '';
   if (covered) { t0 = now; return; }
   const busy = drag || pinch || vel.x || vel.y || Math.abs(St - S) > .0005 || actors.some(a => a.flash > 0 || a.cheer > 0);
   if (!busy && now - t0 < 31) return;                                     // idle: ~30fps is plenty for blinking and walking
@@ -575,7 +664,9 @@ function render(now){
   ctx.setTransform(k, 0, 0, k, -snap(cam.x) * k, -snap(cam.y) * k);
   ctx.drawImage(bg, 0, 0);
   for (let z = 8; z < 42; z += 5) for (let j = 0; j < 4; j++) { const on = Math.sin(T * (2 + j) + z) > .2; const p = iso(C - 1.25 + j * .2, .95, z); ctx.fillStyle = on ? (j % 2 ? '#3fe0c0' : '#ffd84a') : '#33334a'; ctx.fillRect(Math.round(p[0]), Math.round(p[1]), 1, 1); }
-  if (!RM && Math.random() < dt * 6) { const p = iso(1.8, .5, 22); steam.push({ x: p[0], y: p[1], life: 1.6 }); }
+  if (!RM && Math.random() < dt * (6 + env.coffee * 30)) { const p = iso(1.8 + (Math.random() - .5) * .2, .5, 22); steam.push({ x: p[0], y: p[1], life: 1.6 }); }
+  if (env.printer > 0) { const u = 1 - env.printer / 1.6, p = iso(12.75, .55, 13); ctx.fillStyle = OUT; ctx.fillRect(Math.round(p[0]) - 4, Math.round(p[1] - u * 7) - 1, 9, 6); ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(p[0]) - 3, Math.round(p[1] - u * 7), 7, 4); ctx.fillStyle = '#7fb8ff'; ctx.fillRect(Math.round(p[0]) - 2, Math.round(p[1] - u * 7) + 1, 4, 1); }
+  if (env.water > 0) for (let i = 0; i < 3; i++) { const ph = (T * 1.8 + i / 3) % 1, p = iso(5.37, .52, 17 + ph * 10); ctx.fillStyle = '#e9f7ff'; ctx.fillRect(Math.round(p[0]) - 1 + i, Math.round(p[1]), 1, 1); }
   steam = steam.filter(s => (s.life -= dt) > 0);
   steam.forEach(s => { ctx.globalAlpha = s.life / 1.6 * .7; ctx.fillStyle = '#e8e6ef'; ctx.fillRect(snap(s.x + Math.sin(s.life * 5) * 1.5), snap(s.y - (1.6 - s.life) * 10), 2, 2); });
   ctx.globalAlpha = 1;
@@ -588,12 +679,19 @@ function render(now){
   list.sort((p, q) => p.k - q.k);
   for (const o of list) {
     const a = o.a;
-    if (o.t === 0) { ctx.drawImage(a.deskSpr.c, a.deskSpr.x, a.deskSpr.y); if (Math.sin(T * 5 + a.i) > 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(a.cursor[0], a.cursor[1], 1, 2); } }
+    if (o.t === 0) {
+      ctx.drawImage(a.deskSpr.c, a.deskSpr.x, a.deskSpr.y);
+      if (a.state === 'type') { ctx.fillStyle = '#ffffff'; for (let k = 0; k < 3; k++) { const w = 2 + (((T * 12) | 0) + k * 3 + a.i) % 4 * 2; ctx.globalAlpha = .75; ctx.fillRect(a.scr[0] - 7, a.scr[1] + 1 + k * 3, w, 1); } ctx.globalAlpha = 1; }
+      else if (Math.sin(T * 5 + a.i) > 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(a.cursor[0], a.cursor[1], 1, 2); }
+    }
     else if (o.t === 1) ctx.drawImage(a.chairSpr.c, a.chairSpr.x, a.chairSpr.y);
     else drawActor(a, snap);
   }
+  for (const g of glyphs) { ctx.globalAlpha = Math.min(1, g.l * 1.6); ctx.fillStyle = g.c; ctx.fillRect(Math.round(g.x), Math.round(g.y - (1 - g.l) * 12), (g.x | 0) % 2 ? 2 : 1, 1); }
+  ctx.globalAlpha = 1;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (hoverA) placeTip(hoverA);
+  placeBubbles();
 }
 function drawActor(a, snap){
   const p = iso(a.x, a.y), fx = snap(p[0]), fy = snap(p[1]);
@@ -602,7 +700,8 @@ function drawActor(a, snap){
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(fx - 6, fy - 1, 12, 2);
   const cheerHop = a.cheer > 0 ? Math.round(Math.abs(Math.sin((1 - a.cheer) * Math.PI * 3)) * 5 * a.cheer) : 0;
   const hop = (moving && a.step === 1 ? 1 : 0) + cheerHop;
-  ctx.drawImage(creatureSprite(a, a.blinkT < 0, a.look, a.step, a === hoverA || a.flash > 0 || a.cheer > 0), fx - 12, fy - 24 + bob - hop);
+  const typing = a.state === 'type' && !RM, tf = typing ? ((T * 10) | 0) % 2 : 0;
+  ctx.drawImage(creatureSprite(a, a.blinkT < 0, a.look, a.step, a === hoverA || a.flash > 0 || a.cheer > 0, typing ? tf : 0, typing ? 1 - tf : 0), fx - 12, fy - 24 + (typing ? 0 : bob) - hop);
   if (a.p.kind === 'connector') {
     const py = Math.round(fy - 32 + Math.sin(T * 3 + a.i) * 1.5), px = fx - 2;
     ctx.fillStyle = OUT; ctx.fillRect(px - 1, py - 1, 6, 7);
@@ -1135,7 +1234,7 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v9';
+const APP_VERSION = 'v10';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
