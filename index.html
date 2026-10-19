@@ -136,6 +136,21 @@ body[data-view="team"] .zoom{display:none}
 .mate small{font-family:var(--f-comic);font-size:14px;letter-spacing:.06em;padding:0 6px;transform:rotate(-3deg)}
 .mate small.skill{background:var(--amber);color:var(--ink0)} .mate small.connector{background:var(--teal);color:var(--ink0)}
 .mate .rl{font-size:12px;line-height:1.25;color:#cfc9e0}
+/* launch splash */
+.splash{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:#0d0c11;
+  background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 2px,transparent 2px 4px);cursor:pointer}
+.splash-inner{display:flex;flex-direction:column;align-items:center;gap:22px;transform:translateY(-4vh)}
+.splash-logo{width:min(58vw,240px);height:auto;aspect-ratio:1;image-rendering:pixelated;border:5px solid #fff;box-shadow:0 0 0 5px #1b1428,10px 10px 0 5px #e3242b;background:#25242f;
+  animation:spIn .45s steps(5) both}
+.splash-title{min-height:1.2em;font-family:var(--f-display);font-weight:700;font-size:clamp(34px,11vw,52px);letter-spacing:.06em;color:#fff;line-height:1;white-space:pre;
+  text-shadow:4px 4px 0 #e3242b}
+.splash-title .cur{display:inline-block;width:.55em;height:.85em;background:#ffd84a;margin-left:4px;vertical-align:-.05em;animation:spCur .5s steps(1) infinite}
+.splash-title .c2{color:#ffd84a}
+.splash-hint{font-family:var(--f-label);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#7d7699;opacity:0;transition:opacity .4s}
+.splash-hint.on{opacity:1}
+.splash-fx{position:fixed;inset:0;width:100%;height:100%;z-index:101;pointer-events:none;image-rendering:pixelated;display:none}
+@keyframes spIn{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes spCur{50%{opacity:0}}
 /* card overlay */
 .overlay{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;overflow-x:hidden;overflow-y:auto;
   padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
@@ -191,6 +206,14 @@ body[data-view="team"] .zoom{display:none}
 .navbtn{min-width:52px;height:44px}
 </style>
 
+<div class="splash" id="splash" aria-label="Work Pix">
+  <div class="splash-inner">
+    <canvas class="splash-logo" id="splashLogo" width="32" height="32" aria-hidden="true"></canvas>
+    <div class="splash-title" id="splashType" aria-hidden="true"></div>
+    <div class="splash-hint" id="splashHint">Toca para entrar</div>
+  </div>
+</div>
+<canvas class="splash-fx" id="splashFx" aria-hidden="true"></canvas>
 <div class="app">
   <div class="stage" id="stage">
     <canvas id="scene" aria-label="Oficina isométrica con los personajes"></canvas>
@@ -332,7 +355,8 @@ function drawCreature(ctx, x, y, o){
   R(ctx, x+13, y+2, 1, 8, s); R(ctx, x+1, y+10, 12, 1, s); R(ctx, x+12, y+9, 1, 1, s);
   R(ctx, x+2, y+1, 4, 1, l); R(ctx, x+1, y+2, 1, 3, l);
   const lk = o.look || 0, ey = y + 4;
-  if (o.blink) { R(ctx, x+4+lk, ey+1, 2, 1, OUT); R(ctx, x+9+lk, ey+1, 2, 1, OUT); }
+  if (o.wink) { R(ctx, x+3+lk, ey+1, 3, 1, OUT); R(ctx, x+3+lk, ey, 1, 1, OUT); R(ctx, x+9+lk, ey, 2, 2, OUT); R(ctx, x+9+lk, ey, 1, 1, '#ffffff'); }
+  else if (o.blink) { R(ctx, x+4+lk, ey+1, 2, 1, OUT); R(ctx, x+9+lk, ey+1, 2, 1, OUT); }
   else { R(ctx, x+4+lk, ey, 2, 2, OUT); R(ctx, x+9+lk, ey, 2, 2, OUT); R(ctx, x+4+lk, ey, 1, 1, '#ffffff'); R(ctx, x+9+lk, ey, 1, 1, '#ffffff'); }
   const ga = ctx.globalAlpha; ctx.globalAlpha = ga * .55; R(ctx, x+2, y+7, 2, 1, '#ff4f7a'); R(ctx, x+11, y+7, 2, 1, '#ff4f7a'); ctx.globalAlpha = ga;
   if (o.open) { R(ctx, x+6+lk, y+7, 3, 2, OUT); R(ctx, x+7+lk, y+8, 1, 1, '#ff6b81'); }
@@ -353,13 +377,14 @@ function creatureSprite(a, blink, look, step, wave){
 
 /* ---------- app logo: the crew mascot at its desk ---------- */
 const LOGO_PAL = BODIES[0], LOGO_HAT = 7;
-function drawLogo(g, t){
+function drawLogo(g, t, o){
+  o = o || {};
   g.clearRect(0, 0, 32, 32);
   for (let y = 0; y < 17; y += 2) for (let x = 0; x < 32; x += 2) R(g, x, y, 2, 2, ((x >> 1) + (y >> 1)) % 2 ? '#25242f' : '#2f2e3c');
   R(g, 2, 3, 8, 7, '#8a8fa3'); R(g, 3, 4, 6, 5, '#6fb7ff'); R(g, 3, 4, 6, 2, '#a8d6ff'); R(g, 3, 8, 6, 1, '#5fae4a'); R(g, 5, 5, 2, 1, '#ffffff');
   R(g, 0, 17, 32, 3, '#7c2622'); R(g, 0, 17, 32, 1, '#a63a2f');
-  const blink = (t % 3.2) > 3.05, bob = Math.sin(t * 2.4) > .6 ? 1 : 0, ty = Math.floor(t * 7) % 2;
-  drawCreature(g, 9, 6 + bob, { pal: LOGO_PAL, hat: LOGO_HAT, blink, look: 0 });
+  const blink = !o.wink && (t % 3.2) > 3.05, bob = o.hop ? -o.hop : (Math.sin(t * 2.4) > .6 ? 1 : 0), ty = o.still ? 0 : Math.floor(t * (o.speed || 7)) % 2;
+  drawCreature(g, 9, 6 + bob, { pal: LOGO_PAL, hat: LOGO_HAT, blink, wink: o.wink, open: o.wink, look: o.look || 0 });
   R(g, 0, 20, 32, 1, OUT); R(g, 0, 21, 32, 3, '#d9a25b'); R(g, 0, 21, 32, 1, '#ecc48a'); R(g, 0, 24, 32, 8, '#b07c3e'); R(g, 0, 24, 32, 1, '#946531');
   R(g, 4, 27, 9, 1, '#946531'); R(g, 7, 28, 3, 1, '#ffd84a'); R(g, 19, 27, 9, 1, '#946531'); R(g, 22, 28, 3, 1, '#ffd84a');
   R(g, 10, 15, 12, 6, OUT); R(g, 11, 16, 10, 4, '#2c2a3a'); R(g, 11, 16, 10, 1, '#3e3b52');
@@ -537,7 +562,7 @@ let lastLogo = 0;
 function render(now){
   requestAnimationFrame(render);
   if (now - lastLogo > 120) { lastLogo = now; drawLogo(logoCtx, RM ? 0.4 : now / 1000); }
-  const covered = !ov.hidden || !$('viewTeam').hidden;     // office not visible: skip all work
+  const covered = splashOn || !ov.hidden || !$('viewTeam').hidden;     // office not visible: skip all work
   if (covered) { t0 = now; return; }
   const busy = drag || pinch || vel.x || vel.y || Math.abs(St - S) > .0005 || actors.some(a => a.flash > 0 || a.cheer > 0);
   if (!busy && now - t0 < 31) return;                                     // idle: ~30fps is plenty for blinking and walking
@@ -1025,12 +1050,80 @@ function setCrew(list){
   if (need !== RR) { buildWorld(n); resize.reset = true; resize(); }
   makeActors(); buildRoster();
   if (!crew.length) showMsg('La oficina está vacía', 'Cuando la sincronización diaria encuentre tus skills y conectores, aparecerán aquí sentados en su puesto.');
-  else { msg.hidden = true; if (!setCrew.toasted) { setCrew.toasted = true; showToast(); } }
+  else { msg.hidden = true; if (!setCrew.toasted) { setCrew.toasted = true; if (!splashOn) showToast(); } }
   if (selected >= actors.length) closeCard();
 }
 function fmtSync(iso){ try { const d = new Date(iso); return 'Actualizado ' + d.toLocaleString('es-EC', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (e) { return 'Actualizado'; } }
 
 buildWorld(12); resize(); requestAnimationFrame(render);
+/* ---------- launch splash: typing, wink, then a retro pixel avalanche into the app ---------- */
+let splashOn = true;
+(function splash(){
+  const el = $('splash'), lg = $('splashLogo').getContext('2d'), title = $('splashType'), fxc = $('splashFx'), fg = fxc.getContext('2d');
+  let skip = false; try { skip = sessionStorage.getItem('wp-splash') === '1'; sessionStorage.setItem('wp-splash', '1'); } catch (e) {}
+  if (skip || RM) { el.remove(); fxc.remove(); splashOn = false; return; }
+  const WORD = 'WORK PIX', t0 = performance.now(), TYPE_AT = .45, PER = .17, WINK_AT = TYPE_AT + WORD.length * PER + .25, OUT_AT = WINK_AT + .9;
+  let shown = -1, leaving = false, raf = 0, sparks = [];
+  function setTitle(n){
+    if (n === shown) return; shown = n;
+    const txt = WORD.slice(0, n), sp = txt.indexOf(' ');
+    title.innerHTML = '';
+    const a = document.createElement('span'); a.textContent = sp < 0 ? txt : txt.slice(0, sp + 1);
+    const b = document.createElement('span'); b.className = 'c2'; b.textContent = sp < 0 ? '' : txt.slice(sp + 1);
+    const c = document.createElement('span'); c.className = 'cur';
+    title.append(a, b, c);
+  }
+  function frame(now){
+    const t = (now - t0) / 1000;
+    const typing = t >= TYPE_AT && t < WINK_AT, wink = t >= WINK_AT && t < WINK_AT + .55;
+    const hop = t >= WINK_AT && t < WINK_AT + .35 ? Math.round(Math.sin((t - WINK_AT) / .35 * Math.PI) * 2) : 0;
+    drawLogo(lg, t, { speed: typing ? 14 : 3, still: t < TYPE_AT, wink, hop, look: wink ? 1 : 0 });
+    if (typing && Math.random() < .5) sparks.push({ x: 10 + Math.random() * 12, y: 14 + Math.random() * 2, l: 1 });
+    if (wink && t - WINK_AT < .05) for (let i = 0; i < 5; i++) sparks.push({ x: 13 + Math.random() * 3, y: 8 + Math.random() * 2, l: 1, star: true });
+    sparks = sparks.filter(sp => (sp.l -= .06) > 0);
+    sparks.forEach(sp => { lg.fillStyle = sp.star ? '#ffffff' : '#7dffe7'; const y = Math.round(sp.y - (1 - sp.l) * (sp.star ? 5 : 3)); lg.fillRect(Math.round(sp.x), y, 1, 1); if (sp.star && sp.l > .5) { lg.fillRect(Math.round(sp.x) - 1, y, 3, 1); lg.fillRect(Math.round(sp.x), y - 1, 1, 3); } });
+    setTitle(Math.max(0, Math.min(WORD.length, Math.floor((t - TYPE_AT) / PER) + 1)) * (t >= TYPE_AT ? 1 : 0));
+    if (t > 1.2) $('splashHint').classList.add('on');
+    if (t >= OUT_AT && !leaving) { avalanche(); return; }
+    raf = requestAnimationFrame(frame);
+  }
+  function avalanche(){
+    leaving = true; cancelAnimationFrame(raf);
+    const W = innerWidth, H = innerHeight, cs = Math.max(22, Math.round(W / 15)), cols = Math.ceil(W / cs), rows = Math.ceil(H / cs);
+    fxc.width = W; fxc.height = H; fxc.style.display = 'block';
+    const pal = ['#ffd84a', '#ff8f5a', '#4fd8b8', '#5ab8ff', '#b48cff', '#ff7fb0', '#a8e05a', '#1b1428', '#e3242b'];
+    const colDelay = Array.from({ length: cols }, () => Math.random() * .16);
+    const cells = [];
+    for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
+      const fromBottom = rows - 1 - r;
+      cells.push({ c, r, col: pal[(Math.random() * pal.length) | 0], inAt: colDelay[c] + fromBottom * (.42 / rows) + Math.random() * .03,
+        outAt: .62 + Math.random() * .1 + colDelay[c] * .8 + (r / rows) * .12, vy: 0, spin: (Math.random() - .5) * 0.6 });
+    }
+    const s0 = performance.now(); let swapped = false;
+    const step = now => {
+      const t = (now - s0) / 1000; fg.clearRect(0, 0, W, H);
+      if (!swapped && t > .6) { swapped = true; el.remove(); splashOn = false; showToast(); }
+      let alive = 0;
+      for (const k of cells) {
+        let y = k.r * cs, x = k.c * cs, a = 1;
+        if (t < k.inAt) continue;
+        const ui = Math.min(1, (t - k.inAt) / .2);
+        y -= (1 - ui * ui) * (H * .7 + cs);
+        if (t > k.outAt) { const d = t - k.outAt; y += 900 * d * d + 60 * d; }
+        if (y > H) continue;
+        alive++;
+        fg.fillStyle = k.col; fg.fillRect(x, Math.round(y), cs, cs);
+        fg.fillStyle = 'rgba(255,255,255,.28)'; fg.fillRect(x, Math.round(y), cs, 3); fg.fillRect(x, Math.round(y), 3, cs);
+        fg.fillStyle = 'rgba(0,0,0,.28)'; fg.fillRect(x, Math.round(y) + cs - 3, cs, 3); fg.fillRect(x + cs - 3, Math.round(y), 3, cs);
+      }
+      if (t < .6 || alive) requestAnimationFrame(step); else fxc.remove();
+    };
+    requestAnimationFrame(step);
+  }
+  el.addEventListener('click', () => { if (!leaving) avalanche(); });
+  raf = requestAnimationFrame(frame);
+})();
+
 async function loadCrew(){
   try {
     const r = await fetch('crew.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
@@ -1042,7 +1135,7 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v7';
+const APP_VERSION = 'v8';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
   const hadController = !!navigator.serviceWorker.controller; let reloaded = false;
