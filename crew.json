@@ -364,5 +364,53 @@
    "title": "Word",
    "id": "docx"
   }
- ]
+ ],
+ "diag": {
+  "checkedAt": "2026-10-19T19:40:00-05:00",
+  "connectors": [
+   {
+    "name": "Adobe",
+    "status": "ok"
+   },
+   {
+    "name": "Bencher",
+    "status": "ok"
+   },
+   {
+    "name": "Canva",
+    "status": "ok"
+   },
+   {
+    "name": "Figma",
+    "status": "ok"
+   },
+   {
+    "name": "Intuit Mailchimp",
+    "status": "incomplete",
+    "note": "Instalado pero sin terminar de conectar"
+   }
+  ],
+  "plugins": [
+   {
+    "name": "Figma",
+    "enabled": true,
+    "skills": 16
+   }
+  ],
+  "needs": [
+   {
+    "id": "google-workspace",
+    "needs": "Google Drive",
+    "ok": false
+   }
+  ],
+  "history": [
+   {
+    "date": "2026-10-19",
+    "added": [],
+    "removed": [],
+    "note": "Primer registro del diagnóstico"
+   }
+  ]
+ }
 }
