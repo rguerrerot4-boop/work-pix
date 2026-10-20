@@ -187,7 +187,8 @@ body[data-view="team"] .zoom{display:none}
 .card[data-kind="admin"] .kind{background:var(--outline);color:#ffd84a}
 .card[data-kind="admin"] .stripes{background:repeating-linear-gradient(-45deg,var(--outline) 0 6px,#fff3b0 6px 10px)}
 .card.diagging .desc,.card.diagging .ask,.card.diagging .meta{display:none}
-.card.diagging .art{aspect-ratio:1/0.5}
+.card.diagging .art{aspect-ratio:1/0.52}
+.card.diagging .art canvas{margin-top:-21%}
 .diag{display:flex;flex-direction:column;gap:9px}
 #diagBtn{--c:#5fd3a6;--cl:#a6f0d3;--cd:#2f9d76;--dl:-.7s;align-self:stretch}
 #diagBtn .face>span{padding:11px 12px 14px;font-size:17px}
@@ -226,7 +227,8 @@ body[data-view="team"] .zoom{display:none}
 .card-top{display:flex;align-items:center;gap:10px;font-family:var(--f-label);font-size:12px;letter-spacing:.06em}
 .stripes{height:14px;flex:1;background:repeating-linear-gradient(-45deg,var(--outline) 0 6px,transparent 6px 10px);border:2px solid var(--outline)}
 .art{position:relative;aspect-ratio:1/0.82;max-width:100%;border:3px solid var(--outline);background:#0f0c18}
-.art canvas{width:100%;height:100%;display:block;image-rendering:pixelated;will-change:transform}
+.art{overflow:hidden}
+.art canvas{width:100%;height:auto;aspect-ratio:320/262;display:block;image-rendering:pixelated;will-change:transform}
 .kind{position:absolute;left:8px;top:8px;font-family:var(--f-label);font-size:11px;letter-spacing:.08em;background:var(--sel);color:var(--outline);padding:3px 7px;border:2px solid var(--outline)}
 .card[data-kind="connector"] .kind{background:var(--holo)}
 .id-row{display:flex;justify-content:space-between;gap:8px;font-family:var(--f-label);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-variant-numeric:tabular-nums}
@@ -1748,7 +1750,7 @@ async function loadCrew(){
 }
 loadCrew();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCrew(); });
-const APP_VERSION = 'v15';
+const APP_VERSION = 'v16';
 $('syncTxt').dataset.v = APP_VERSION;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {}));
